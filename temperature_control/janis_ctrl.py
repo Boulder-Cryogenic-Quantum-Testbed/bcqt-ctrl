@@ -637,19 +637,14 @@ class JanisCtrl(object):
                     segments=segments)
 
         else:
-            outputfile = sampleid+'_'+str(self.vna_centerf)+'GHz'
-            PNA.get_data(centerf = self.vna_centerf,
-                         span = self.vna_span,
-                         temp = temp,
-                         averages = self.vna_averages,
-                         power = self.vna_startpower,
-                         edelay = self.vna_edelay,
-                         ifband = self.vna_ifband,
-                         points = self.vna_points,
-                         outputfile = outputfile,
-                         sparam = self.sparam,
-                         cal_set = calset,
-                         instr_addr = self.vna_addr)
+            PNA.power_sweep(self.vna_startpower, self.vna_endpower,
+                    self.vna_numsweeps, self.vna_centerf, self.vna_span, temp,
+                    self.vna_averages, self.vna_edelay, self.vna_ifband,
+                    self.vna_points, prefix, sparam=self.sparam, 
+                    adaptive_averaging=adaptive_averaging,
+                    cal_set=cal_set,
+                    setup_only=setup_only,
+                    segments=segments)
 
         out[idx] = 0
 
@@ -908,8 +903,8 @@ def measure_multiple_resonators(fcs, spans, delays, powers,
         ifbw=1., sparam='S21', npts=1001,
         adaptive_averaging=True, sample_name='',
         runtime=1., cal_set=None, start_delay=0.,
-        offresfraction=0.45, is_segmented=True, use_homophasal=False,
-        Navg_init=None):
+        offresfraction=0.45, is_segmented=True, use_homophasal=None,
+        Navg_init=None, Noffres=5):
     """
     Measures multiple resonators sequentially
     """
@@ -919,8 +914,12 @@ def measure_multiple_resonators(fcs, spans, delays, powers,
     Tstart = 0.03; Tstop = 0.315; dT = 0.015
     sample_time = 15; T_eps = 0.0025 # -- 255 mK and up
     therm_time  = 300. # wait an extra 5 minutes to thermalize
-    p1 = powers[0]
-    p2 = powers[-1]
+    if len(powers) < 2:
+        p1 = powers[0]
+        p2 = powers[0]
+    else:
+        p1 = powers[0]
+        p2 = powers[-1]
     power_steps = len(powers)
 
     # Delay the start of a sweep by Nstart hours
@@ -997,18 +996,48 @@ def measure_multiple_resonators(fcs, spans, delays, powers,
             fb = fstop  - offresfraction * span / 2
 
             Q = 15 * fc / span
-            if use_homophasal:
+            if use_homophasal == 'homophasal':
                 theta0 = np.pi / 32
                 Nf = 30
                 theta = np.linspace(-np.pi + theta0, (np.pi - theta0), Nf + 2)
                 freq = fc * (1 - 0.5 * np.tan(theta / 2) / Q)
                 segments = [f',1,2,{ff1*fscale},{ff2*fscale}'
                         for ff1, ff2 in zip(freq[0::2], freq[1::2])]
+            elif use_homophasal == 'hybrid':
+                theta0 = np.pi / 32
+                Nf = 30
+                theta = np.linspace(-np.pi + theta0, (np.pi - theta0), Nf + 2)
+                freq = fc * (1 - 0.5 * np.tan(theta / 2) / Q)
+
+                np.set_printoptions(precision=4)
+
+                # Homophasal, near resonance
+                hsegments = [f',1,2,{ff1*fscale},{ff2*fscale}'
+                        for ff1, ff2 in zip(freq[0::2], freq[1::2])]
+                fap = np.min(freq) * fscale
+                fbp = np.max(freq) * fscale
+                dfa = (fap - fstart*fscale) / (Noffres + 1)
+                fa = fap - dfa
+
+                print(f'fstart * fscale: {fstart * fscale}')
+                print(f'fap: {fap}')
+                print(f'dfa: {dfa}')
+                print(f'fa: {fa}')
+
+                dfb = (fstop*fscale - fbp) / (Noffres + 1)
+                fb = fap + dfb
+
+                # Linear segments, off resonance
+                # segments = [ f',1,{Noffres},{fstop*fscale}, {fb}',
+                #             *hsegments,
+                #            f',1,{Noffres},{fa}, {fstart*fscale}',]
+                segments = [f',1,{Noffres},{fstart*fscale},{fa}', f',1,{Noffres},{fb},{fstop*fscale}']
+                segments = hsegments # [f',1,{Noffres},{fstart*fscale},{fa}', f',1,{Noffres},{fb},{fstop*fscale}']
             else:
                 segments = [f',1,5,{fstart*fscale},{fa*fscale}',
                             f',1,41,{fa*fscale},{fb*fscale}',
                             f',1,5,{fb*fscale},{fstop*fscale}']
-            print(f'[{fstart}, {fa}], [{fa}, {fb}], [{fb}, {fstop}] GHz')
+                print(f'[{fstart}, {fa}], [{fa}, {fb}], [{fb}, {fstop}] GHz')
         else:
             segments = None
 
