@@ -36,7 +36,7 @@ import numpy as np
 import errno
 
 import sys
-sys.path.append(r'C:\Users\Lehnert Lab\GitHub\measurement\pna_control')
+sys.path.append(r'C:\Users\Lehnert Lab\GitHub\bcqt-ctrl\pna_control')
 import pna_control as PNA
 import os
 
@@ -88,8 +88,6 @@ class JanisCtrl(object):
         if self.init_socket and (not self.bypass_janis):
             self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.socket.connect((self.TCP_IP, self.TCP_PORT))
-        elif self.bypass_janis:
-            self.socket = None
         else:
             self.socket = None
 
@@ -103,7 +101,7 @@ class JanisCtrl(object):
         ## Set the temperature list as linearly or logarithmically spaced
         if self.T_sweep_list_spacing == 'linear':
             self.T_sweep_list = np.linspace(Tstart, Tstop, NT)
-        elif self.T_sweep_list_spacing == 'linear':
+        elif self.T_sweep_list_spacing == 'log':
             Tstart_log10 = np.log10(Tstart)
             Tstop_log10 = np.log10(Tstop)
             self.T_sweep_list = np.linspace(Tstart_log10, Tstop_log10, NT)
@@ -120,11 +118,7 @@ class JanisCtrl(object):
         """
         # Set the current to zero and close the socket connection
         print('Calling destructor ...')
-        if self.socket is not None:
-            print('Setting current to 0 ...')
-            self.set_current(0.)
-            self.socket.close()
-            self.socket = None
+        self.close_socket()
 
     def close_socket(self):
         """
@@ -158,12 +152,6 @@ class JanisCtrl(object):
         else:
             self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.socket.connect((self.TCP_IP, self.TCP_PORT))
-
-    def close_socket(self):
-        if self.socket is not None:
-            self.socket.close()
-            self.socket = None
-
 
     def tcp_send(self, message):
         length = len(message)
@@ -621,8 +609,8 @@ class JanisCtrl(object):
 
         # Get the temperature from the temperature controller
         temp = Tset * 1e3 #mk
-        sampleid = f'{prefix}_{self.dstr}' 
-        pstr = f'{prefix}_{int(self.vna_startpower)}_{int(self.vna_endpower)}dBm'
+        # sampleid = f'{prefix}_{self.dstr}' 
+        # sample_name = f'{prefix}_{int(self.vna_startpower)}_{int(self.vna_endpower)}dBm'
 
         # Preparing to measure frequencies, powers
         if self.vna_numsweeps > 1:
@@ -638,12 +626,11 @@ class JanisCtrl(object):
             # Note: PNA power sweep assumes the outputfile has .csv as its last
             # four characters and removes them when manipulating strings and
             # directories
-            outputfile = sampleid+'_'+str(self.vna_centerf)+'GHz'
+            # outputfile = sampleid+'_'+str(self.vna_centerf)+'GHz'
             PNA.power_sweep(self.vna_startpower, self.vna_endpower,
                     self.vna_numsweeps, self.vna_centerf, self.vna_span, temp,
                     self.vna_averages, self.vna_edelay, self.vna_ifband,
-                    self.vna_points, outputfile, sparam=self.sparam, 
-                    meastype=pstr,
+                    self.vna_points, prefix, sparam=self.sparam, 
                     adaptive_averaging=adaptive_averaging,
                     cal_set=cal_set,
                     setup_only=setup_only,
