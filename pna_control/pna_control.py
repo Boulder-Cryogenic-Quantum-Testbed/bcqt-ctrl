@@ -111,7 +111,8 @@ def pna_setup(pna,
     averages = averages//1
     pna.write('SENSe1:AVERage:Count {}'.format(averages))
 
-def read_data(pna, points, sample_id, power, temp, centerf, segments : list = None):
+def read_data(pna, points, sample_id, power, temp, centerf, segments : list = None,
+        overwrite : bool = True):
     '''
     function to read in data from the pna and output it into a file
     '''
@@ -149,10 +150,10 @@ def read_data(pna, points, sample_id, power, temp, centerf, segments : list = No
 
     #create a new directory for the output to be put into
     directory_name = timestamp_folder(os.getcwd(), centerf, sample_id)
-    try:
+    if not os.path.exists(directory_name):
+        print(f'directory_name: {directory_name}')
+        print(f'Does not exist.')
         os.mkdir(directory_name)
-    except FileExistsError:
-        pass
 
     #open output file and put data points into the file
     filename = name_datafile(sample_id, power, temp, cfreq)
@@ -317,7 +318,7 @@ def timestamp_folder(dir: str = None, centerf = None, sample_id:
         Returns:
             Formatted path eg. dir/5p51414GHz_HPsweep_200713_12_18_04/ 
     """
-    now = time.strftime("%y%m%d_%H_%M_%S", time.localtime())
+    now = time.strftime("%y%m%d", time.localtime())
 
     output =f'{sample_id}_{centerf:.3f}GHz_{now}'
     output = output.replace('.','p')
@@ -326,10 +327,5 @@ def timestamp_folder(dir: str = None, centerf = None, sample_id:
         output_path = os.path.join(dir, output)
     else:
         output_path = output + '/'
-    count=2
-    path = output_path
-    while os.path.isdir(output_path):
-        output_path=path[0:-1]+'_'+ str(count) +'/'
-        count = count+1
     return output_path
 
