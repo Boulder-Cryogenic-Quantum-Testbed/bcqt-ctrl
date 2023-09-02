@@ -899,12 +899,59 @@ def multiple_resonator_driver(Jctrl : JanisCtrl):
             start_powers, end_powers, num_powers, sample_name,
             avgs, pts=1001, sparam='S12')
 
+def compute_segments(fc, span, p, pc, beta, fscale, Noffres, offresfraction,
+        option='hybrid'):
+    """
+    Computes segments needed to perform homophasal measurements
+    with inputs from the resonator frequencies, bandwidths, powers
+    """
+    # Estimate the number of linewidths per sweep
+    power_fac = 1. # 0.5 * (np.tanh((4 / beta) * (p - pc) / pc) + 1)
+    print(f'power_fac: {power_fac}')
+    Q = 20 * (fc / span) * power_fac
+
+    # Compute the frequencies
+    fstart = fc - span / 2
+    fstop  = fc + span / 2
+    fa = fstart + offresfraction * span / 2
+    fb = fstop  - offresfraction * span / 2
+    if option == 'homophasal':
+        theta0 = np.pi / 32
+        Nf = 30
+        theta = np.linspace(-np.pi + theta0, (np.pi - theta0), Nf + 2)
+        freq = fc * (1 - 0.5 * np.tan(theta / 2) / Q)
+        segments = [f',1,2,{ff1*fscale},{ff2*fscale}'
+                for ff1, ff2 in zip(freq[0::2], freq[1::2])]
+    elif option == 'hybrid':
+        theta0 = np.pi / 32
+        Nf = 20
+        theta = np.linspace(-np.pi + theta0, (np.pi - theta0), Nf + 2)
+        freq = fc * (1 - 0.5 * np.tan(theta / 2) / Q)
+
+        np.set_printoptions(precision=4)
+
+        # Homophasal, near resonance
+        hsegments = [f',1,2,{ff1*fscale},{ff2*fscale}'
+                for ff1, ff2 in zip(freq[0::2], freq[1::2])][1:-1]
+        fap = np.min(freq[1:-1]) * fscale
+        fbp = np.max(freq[1:-1]) * fscale
+
+        segments = [f',1,{Noffres},{fstop*fscale}, {fbp}',
+                    *hsegments,
+                    f',1,{Noffres},{fap},{fstart*fscale}']
+    else:
+        segments = [f',1,5,{fstart*fscale},{fa*fscale}',
+                    f',1,41,{fa*fscale},{fb*fscale}',
+                    f',1,5,{fb*fscale},{fstop*fscale}']
+
+    return segments
+
 def measure_multiple_resonators(fcs, spans, delays, powers,
         ifbw=1., sparam='S21', npts=1001,
         adaptive_averaging=True, sample_name='',
         runtime=1., cal_set=None, start_delay=0.,
         offresfraction=0.45, is_segmented=True, use_homophasal=None,
-        Navg_init=None, Noffres=5):
+        Navg_init=None, Noffres=5, pc=-75., beta=0.2):
     """
     Measures multiple resonators sequentially
     """
@@ -945,8 +992,8 @@ def measure_multiple_resonators(fcs, spans, delays, powers,
         Jctrl.sparam = sparam
         Jctrl.vna_ifband = ifbw
         Jctrl.vna_startpower = p1 # dBm
-        Jctrl.vna_endpower = p2 # dBm
-        Jctrl.vna_numsweeps = power_steps 
+        Jctrl.vna_endpower   = p2 # dBm
+        Jctrl.vna_numsweeps  = power_steps 
 
         """
         Initial number of averages
@@ -980,11 +1027,6 @@ def measure_multiple_resonators(fcs, spans, delays, powers,
                         total_time_hr)
 
             Jctrl.vna_averages = Navg_adaptive
-        # else:
-        #     runtime_est = Jctrl.estimate_time_adaptive_averages(
-        #                     time_per_sweep,
-        #                     powers,
-        #                     Jctrl.vna_averages)
 
         # Set the segment data
         if is_segmented:
@@ -995,49 +1037,40 @@ def measure_multiple_resonators(fcs, spans, delays, powers,
             fa = fstart + offresfraction * span / 2
             fb = fstop  - offresfraction * span / 2
 
-            Q = 15 * fc / span
-            if use_homophasal == 'homophasal':
-                theta0 = np.pi / 32
-                Nf = 30
-                theta = np.linspace(-np.pi + theta0, (np.pi - theta0), Nf + 2)
-                freq = fc * (1 - 0.5 * np.tan(theta / 2) / Q)
-                segments = [f',1,2,{ff1*fscale},{ff2*fscale}'
-                        for ff1, ff2 in zip(freq[0::2], freq[1::2])]
-            elif use_homophasal == 'hybrid':
-                theta0 = np.pi / 32
-                Nf = 30
-                theta = np.linspace(-np.pi + theta0, (np.pi - theta0), Nf + 2)
-                freq = fc * (1 - 0.5 * np.tan(theta / 2) / Q)
+            # segments = compute_homophasal_segments()
+            p = p1
+            segments = compute_segments(fc, span, p, pc, beta, 
+                    fscale, Noffres, offresfraction, option=use_homophasal)
+            # Q = 10 * (fc / span)
+            # if use_homophasal == 'homophasal':
+            #     theta0 = np.pi / 32
+            #     Nf = 30
+            #     theta = np.linspace(-np.pi + theta0, (np.pi - theta0), Nf + 2)
+            #     freq = fc * (1 - 0.5 * np.tan(theta / 2) / Q)
+            #     segments = [f',1,2,{ff1*fscale},{ff2*fscale}'
+            #             for ff1, ff2 in zip(freq[0::2], freq[1::2])]
+            # elif use_homophasal == 'hybrid':
+            #     theta0 = np.pi / 32
+            #     Nf = 20
+            #     theta = np.linspace(-np.pi + theta0, (np.pi - theta0), Nf + 2)
+            #     freq = fc * (1 - 0.5 * np.tan(theta / 2) / Q)
 
-                np.set_printoptions(precision=4)
+            #     np.set_printoptions(precision=4)
 
-                # Homophasal, near resonance
-                hsegments = [f',1,2,{ff1*fscale},{ff2*fscale}'
-                        for ff1, ff2 in zip(freq[0::2], freq[1::2])]
-                fap = np.min(freq) * fscale
-                fbp = np.max(freq) * fscale
-                dfa = (fap - fstart*fscale) / (Noffres + 1)
-                fa = fap - dfa
+            #     # Homophasal, near resonance
+            #     hsegments = [f',1,2,{ff1*fscale},{ff2*fscale}'
+            #             for ff1, ff2 in zip(freq[0::2], freq[1::2])][1:-1]
+            #     fap = np.min(freq[1:-1]) * fscale
+            #     fbp = np.max(freq[1:-1]) * fscale
 
-                print(f'fstart * fscale: {fstart * fscale}')
-                print(f'fap: {fap}')
-                print(f'dfa: {dfa}')
-                print(f'fa: {fa}')
-
-                dfb = (fstop*fscale - fbp) / (Noffres + 1)
-                fb = fap + dfb
-
-                # Linear segments, off resonance
-                # segments = [ f',1,{Noffres},{fstop*fscale}, {fb}',
-                #             *hsegments,
-                #            f',1,{Noffres},{fa}, {fstart*fscale}',]
-                segments = [f',1,{Noffres},{fstart*fscale},{fa}', f',1,{Noffres},{fb},{fstop*fscale}']
-                segments = hsegments # [f',1,{Noffres},{fstart*fscale},{fa}', f',1,{Noffres},{fb},{fstop*fscale}']
-            else:
-                segments = [f',1,5,{fstart*fscale},{fa*fscale}',
-                            f',1,41,{fa*fscale},{fb*fscale}',
-                            f',1,5,{fb*fscale},{fstop*fscale}']
-                print(f'[{fstart}, {fa}], [{fa}, {fb}], [{fb}, {fstop}] GHz')
+            #     segments = [f',1,{Noffres},{fstop*fscale}, {fbp}',
+            #                 *hsegments,
+            #                 f',1,{Noffres},{fap},{fstart*fscale}']
+            # else:
+            #     segments = [f',1,5,{fstart*fscale},{fa*fscale}',
+            #                 f',1,41,{fa*fscale},{fb*fscale}',
+            #                 f',1,5,{fb*fscale},{fstop*fscale}']
+            #     print(f'[{fstart}, {fa}], [{fa}, {fb}], [{fb}, {fstop}] GHz')
         else:
             segments = None
 
