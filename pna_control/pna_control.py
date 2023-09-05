@@ -111,11 +111,11 @@ def pna_setup(pna,
     averages = averages//1
     pna.write('SENSe1:AVERage:Count {}'.format(averages))
 
-def read_data(pna, points, outputfile, power, temp, segments : list = None):
+def read_data(pna, points, sample_id, power, temp, centerf, segments : list = None,
+        overwrite : bool = True):
     '''
     function to read in data from the pna and output it into a file
     '''
-
     #read in frequency
     cfreq = float(pna.query('SENSe1:FREQuency:CENTER?')) / 1e9
 
@@ -148,9 +148,16 @@ def read_data(pna, points, outputfile, power, temp, segments : list = None):
     # pna.write('INITiate:IMMediate;*wai')
     mag = pna.query_ascii_values('CALCulate1:DATA? FDATA', container=np.array)
 
+    #create a new directory for the output to be put into
+    directory_name = timestamp_folder(os.getcwd(), centerf, sample_id)
+    if not os.path.exists(directory_name):
+        print(f'directory_name: {directory_name}')
+        print(f'Does not exist.')
+        os.mkdir(directory_name)
+
     #open output file and put data points into the file
-    filename = name_datafile(outputfile, power, temp, cfreq)
-    file = open(filename+'.csv', "w")
+    filename = name_datafile(sample_id, power, temp, cfreq)
+    file = open(directory_name + '/' + filename + '.csv', 'w')
 
     count = 0
     for i in freq:
@@ -166,7 +173,7 @@ def get_data(centerf: float,
             edelay: float = 40, 
             ifband: float = 5, 
             points: int = 201, 
-            outputfile: str = "results.csv",
+            sample_id: str = 'sample',
             # instr_addr : str = 'GPIB::16::INSTR', # If using GPIB
             # instr_addr : str = 'TCPIP0::69.254.35.52::islip0::INSTR1', # Old address from JILA lab
             instr_addr : str = 'TCPIP0::K-N5222B-21927::hislip0,4880::INSTR',
@@ -223,8 +230,8 @@ def get_data(centerf: float,
     time.sleep(3.0)
     keysight.write('SYSTem:CHANnels:HOLD')
 
-    read_data(keysight, points, outputfile, power, temp,
-              segments=segments)
+    read_data(keysight, points, sample_id, power, temp,
+            centerf, segments=segments)
 
     keysight.write('SYSTem:CHANnels:RESume')
     keysight.write('OUTPut:STATe OFF')
@@ -239,8 +246,7 @@ def power_sweep(startpower: float,
                 edelay: float = 40, 
                 ifband: float = 5, 
                 points: int = 201, 
-                outputfile: str = "results.csv",
-                meastype: str = 'powersweep',
+                sample_id: str = 'sample',
                 sparam : str = 'S12',
                 adaptive_averaging : bool = True,
                 cal_set : str = None,
@@ -260,54 +266,46 @@ def power_sweep(startpower: float,
         stepsize = sweeps[0]-sweeps[1]
     print(f'Measuring {sparam} ...')
 
-    #create a new directory for the output to be put into
-    directory_name = timestamp_folder(os.getcwd(), centerf, meastype)
-    os.mkdir(directory_name)
-    outputfile = directory_name + '/' + outputfile
-
-    #write an output file with conditions
-    with open(directory_name+'/'+'conditions.csv',"w") as file:
-        file.write('# Parameter, Value, Units\n')
-        file.write(f'SPARAM, {sparam}, \n')
-        file.write(f'CALSET, {cal_set}, \n')
-        file.write(f'STARTPOWER, {startpower}, dB\n')
-        file.write(f'ENDPOWER, {endpower}, dB\n')
-        file.write(f'NUMSWEEPS, {numsweeps}, \n')
-        file.write(f'CENTERF, {centerf}, GHz\n')
-        file.write(f'SPAN, {span}, MHz\n')
-        file.write(f'TEMP, {temp:.3f}, mK\n')
-        file.write(f'STARTING AVERAGES, {averages}\n')
-        file.write(f'EDELAY, {edelay}, ns\n')
-        file.write(f'IFBAND, {ifband}, kHz\n')
-        file.write(f'POINTS, {points}, \n')
-        file.close()
+    # #write an output file with conditions
+    # with open(directory_name+'/'+'conditions.csv',"w") as file:
+    #     file.write('# Parameter, Value, Units\n')
+    #     file.write(f'SPARAM, {sparam}, \n')
+    #     file.write(f'CALSET, {cal_set}, \n')
+    #     file.write(f'STARTPOWER, {startpower}, dB\n')
+    #     file.write(f'ENDPOWER, {endpower}, dB\n')
+    #     file.write(f'NUMSWEEPS, {numsweeps}, \n')
+    #     file.write(f'CENTERF, {centerf}, GHz\n')
+    #     file.write(f'SPAN, {span}, MHz\n')
+    #     file.write(f'TEMP, {temp:.3f}, mK\n')
+    #     file.write(f'STARTING AVERAGES, {averages}\n')
+    #     file.write(f'EDELAY, {edelay}, ns\n')
+    #     file.write(f'IFBAND, {ifband}, kHz\n')
+    #     file.write(f'POINTS, {points}, \n')
+    #     file.close()
 
     #run each sweep
     for i in sweeps:
         print(f'{i} dBm, {averages//1} averages ...')
         get_data(centerf, span, temp, averages, i, edelay, ifband, points,
-                outputfile, sparam=sparam, cal_set=cal_set,
+                sample_id, sparam=sparam, cal_set=cal_set,
                 setup_only=setup_only, segments=segments)
         if adaptive_averaging: 
             averages = averages * ((10**(stepsize/10))**0.5)
     print('Power sweep completed.')
 
 
-def name_datafile(outputfile: str,
+def name_datafile(sample_id: str,
                   power: float,
                   temp: float,
                   freq: float) -> str:
     # Check that the file does not have an extension, otherwise strip it
-    fsplit = outputfile.split('.')
-    if len(fsplit) > 1:
-      outputfile = fsplit[0]
     # Use f-strings to make the formatting more compact
-    filename = f'{outputfile}_{freq:.3f}GHz_{power:.0f}dB_{temp:.0f}mK'
+    filename = f'{sample_id}_{freq:.3f}GHz_{power:.0f}dB_{temp:.0f}mK'
     filename = filename.replace('.','p')
 
     return filename
     
-def timestamp_folder(dir: str = None, centerf = None, meastype:
+def timestamp_folder(dir: str = None, centerf = None, sample_id:
         str='powersweep') -> str:
     """Create a filename and directory structure to annotate the scan.
 
@@ -320,19 +318,14 @@ def timestamp_folder(dir: str = None, centerf = None, meastype:
         Returns:
             Formatted path eg. dir/5p51414GHz_HPsweep_200713_12_18_04/ 
     """
-    now = time.strftime("%y%m%d_%H_%M_%S", time.localtime())
+    now = time.strftime("%y%m%d", time.localtime())
 
-    output = meastype+ '_' + f'{centerf:.3f}GHz_' + now
+    output =f'{sample_id}_{centerf:.3f}GHz_{now}'
     output = output.replace('.','p')
     
     if dir != None:
         output_path = os.path.join(dir, output)
     else:
         output_path = output + '/'
-    count=2
-    path = output_path
-    while os.path.isdir(output_path):
-        output_path=path[0:-1]+'_'+ str(count) +'/'
-        count = count+1
     return output_path
 

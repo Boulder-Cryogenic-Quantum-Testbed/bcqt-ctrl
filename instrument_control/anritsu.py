@@ -9,7 +9,7 @@ Date:   220728
 
 import pyvisa
 import sys
-sys.path.append(r'C:\Users\Lehnert Lab\GitHub\measurement\pna_control')
+sys.path.append(r'C:\Users\Lehnert Lab\GitHub\bcqt-ctrl\pna_control')
 import pna_control as pna
 import numpy as np
 import datetime

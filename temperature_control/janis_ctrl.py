@@ -36,7 +36,7 @@ import numpy as np
 import errno
 
 import sys
-sys.path.append(r'C:\Users\Lehnert Lab\GitHub\measurement\pna_control')
+sys.path.append(r'C:\Users\Lehnert Lab\GitHub\bcqt-ctrl\pna_control')
 import pna_control as PNA
 import os
 
@@ -88,8 +88,6 @@ class JanisCtrl(object):
         if self.init_socket and (not self.bypass_janis):
             self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.socket.connect((self.TCP_IP, self.TCP_PORT))
-        elif self.bypass_janis:
-            self.socket = None
         else:
             self.socket = None
 
@@ -103,7 +101,7 @@ class JanisCtrl(object):
         ## Set the temperature list as linearly or logarithmically spaced
         if self.T_sweep_list_spacing == 'linear':
             self.T_sweep_list = np.linspace(Tstart, Tstop, NT)
-        elif self.T_sweep_list_spacing == 'linear':
+        elif self.T_sweep_list_spacing == 'log':
             Tstart_log10 = np.log10(Tstart)
             Tstop_log10 = np.log10(Tstop)
             self.T_sweep_list = np.linspace(Tstart_log10, Tstop_log10, NT)
@@ -120,11 +118,7 @@ class JanisCtrl(object):
         """
         # Set the current to zero and close the socket connection
         print('Calling destructor ...')
-        if self.socket is not None:
-            print('Setting current to 0 ...')
-            self.set_current(0.)
-            self.socket.close()
-            self.socket = None
+        self.close_socket()
 
     def close_socket(self):
         """
@@ -158,12 +152,6 @@ class JanisCtrl(object):
         else:
             self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.socket.connect((self.TCP_IP, self.TCP_PORT))
-
-    def close_socket(self):
-        if self.socket is not None:
-            self.socket.close()
-            self.socket = None
-
 
     def tcp_send(self, message):
         length = len(message)
@@ -621,8 +609,8 @@ class JanisCtrl(object):
 
         # Get the temperature from the temperature controller
         temp = Tset * 1e3 #mk
-        sampleid = f'{prefix}_{self.dstr}' 
-        pstr = f'{prefix}_{int(self.vna_startpower)}_{int(self.vna_endpower)}dBm'
+        # sampleid = f'{prefix}_{self.dstr}' 
+        # sample_name = f'{prefix}_{int(self.vna_startpower)}_{int(self.vna_endpower)}dBm'
 
         # Preparing to measure frequencies, powers
         if self.vna_numsweeps > 1:
@@ -638,31 +626,25 @@ class JanisCtrl(object):
             # Note: PNA power sweep assumes the outputfile has .csv as its last
             # four characters and removes them when manipulating strings and
             # directories
-            outputfile = sampleid+'_'+str(self.vna_centerf)+'GHz'
+            # outputfile = sampleid+'_'+str(self.vna_centerf)+'GHz'
             PNA.power_sweep(self.vna_startpower, self.vna_endpower,
                     self.vna_numsweeps, self.vna_centerf, self.vna_span, temp,
                     self.vna_averages, self.vna_edelay, self.vna_ifband,
-                    self.vna_points, outputfile, sparam=self.sparam, 
-                    meastype=pstr,
+                    self.vna_points, prefix, sparam=self.sparam, 
                     adaptive_averaging=adaptive_averaging,
                     cal_set=cal_set,
                     setup_only=setup_only,
                     segments=segments)
 
         else:
-            outputfile = sampleid+'_'+str(self.vna_centerf)+'GHz'
-            PNA.get_data(centerf = self.vna_centerf,
-                         span = self.vna_span,
-                         temp = temp,
-                         averages = self.vna_averages,
-                         power = self.vna_startpower,
-                         edelay = self.vna_edelay,
-                         ifband = self.vna_ifband,
-                         points = self.vna_points,
-                         outputfile = outputfile,
-                         sparam = self.sparam,
-                         cal_set = calset,
-                         instr_addr = self.vna_addr)
+            PNA.power_sweep(self.vna_startpower, self.vna_endpower,
+                    self.vna_numsweeps, self.vna_centerf, self.vna_span, temp,
+                    self.vna_averages, self.vna_edelay, self.vna_ifband,
+                    self.vna_points, prefix, sparam=self.sparam, 
+                    adaptive_averaging=adaptive_averaging,
+                    cal_set=cal_set,
+                    setup_only=setup_only,
+                    segments=segments)
 
         out[idx] = 0
 
@@ -916,6 +898,208 @@ def multiple_resonator_driver(Jctrl : JanisCtrl):
     Jctrl.pna_sweep_multiple_resonators(freqs, ifbws, delays, spans,
             start_powers, end_powers, num_powers, sample_name,
             avgs, pts=1001, sparam='S12')
+
+def compute_segments(fc, span, p, pc, beta, fscale, Noffres, offresfraction,
+        option='hybrid'):
+    """
+    Computes segments needed to perform homophasal measurements
+    with inputs from the resonator frequencies, bandwidths, powers
+    """
+    # Estimate the number of linewidths per sweep
+    power_fac = 1. # 0.5 * (np.tanh((4 / beta) * (p - pc) / pc) + 1)
+    print(f'power_fac: {power_fac}')
+    Q = 20 * (fc / span) * power_fac
+
+    # Compute the frequencies
+    fstart = fc - span / 2
+    fstop  = fc + span / 2
+    fa = fstart + offresfraction * span / 2
+    fb = fstop  - offresfraction * span / 2
+    if option == 'homophasal':
+        theta0 = np.pi / 32
+        Nf = 30
+        theta = np.linspace(-np.pi + theta0, (np.pi - theta0), Nf + 2)
+        freq = fc * (1 - 0.5 * np.tan(theta / 2) / Q)
+        segments = [f',1,2,{ff1*fscale},{ff2*fscale}'
+                for ff1, ff2 in zip(freq[0::2], freq[1::2])]
+    elif option == 'hybrid':
+        theta0 = np.pi / 32
+        Nf = 20
+        theta = np.linspace(-np.pi + theta0, (np.pi - theta0), Nf + 2)
+        freq = fc * (1 - 0.5 * np.tan(theta / 2) / Q)
+
+        np.set_printoptions(precision=4)
+
+        # Homophasal, near resonance
+        hsegments = [f',1,2,{ff1*fscale},{ff2*fscale}'
+                for ff1, ff2 in zip(freq[0::2], freq[1::2])][1:-1]
+        fap = np.min(freq[1:-1]) * fscale
+        fbp = np.max(freq[1:-1]) * fscale
+
+        segments = [f',1,{Noffres},{fstop*fscale}, {fbp}',
+                    *hsegments,
+                    f',1,{Noffres},{fap},{fstart*fscale}']
+    else:
+        segments = [f',1,5,{fstart*fscale},{fa*fscale}',
+                    f',1,41,{fa*fscale},{fb*fscale}',
+                    f',1,5,{fb*fscale},{fstop*fscale}']
+
+    return segments
+
+def measure_multiple_resonators(fcs, spans, delays, powers,
+        ifbw=1., sparam='S21', npts=1001,
+        adaptive_averaging=True, sample_name='',
+        runtime=1., cal_set=None, start_delay=0.,
+        offresfraction=0.45, is_segmented=True, use_homophasal=None,
+        Navg_init=None, Noffres=5, pc=-75., beta=0.2):
+    """
+    Measures multiple resonators sequentially
+    """
+    # Example inputs to run a temperature sweep
+    # Iterate over a list of temperatures
+    # 30 mK -- 300 mK, 10 mK steps
+    Tstart = 0.03; Tstop = 0.315; dT = 0.015
+    sample_time = 15; T_eps = 0.0025 # -- 255 mK and up
+    therm_time  = 300. # wait an extra 5 minutes to thermalize
+    if len(powers) < 2:
+        p1 = powers[0]
+        p2 = powers[0]
+    else:
+        p1 = powers[0]
+        p2 = powers[-1]
+    power_steps = len(powers)
+
+    # Delay the start of a sweep by Nstart hours
+    h2s = 3600.
+
+    for fc, span, delay in zip(fcs, spans, delays):
+
+        # Create the JanisCtrl 
+        print(f'Measuring {sample_name} at {fc} GHz ...')
+        Jctrl = JanisCtrl(Tstart, Tstop, dT,
+                sample_time=sample_time, T_eps=T_eps,
+                therm_time=therm_time,
+                init_socket=True, bypass_janis=False,
+                adaptive_averaging=adaptive_averaging)
+
+        """
+        Change these settings for each power sweep
+        """
+        Jctrl.vna_centerf = fc # GHz
+        Jctrl.vna_span = span # MHz
+        Jctrl.vna_edelay = delay #ns
+        Jctrl.vna_points = npts
+        Jctrl.sparam = sparam
+        Jctrl.vna_ifband = ifbw
+        Jctrl.vna_startpower = p1 # dBm
+        Jctrl.vna_endpower   = p2 # dBm
+        Jctrl.vna_numsweeps  = power_steps 
+
+        """
+        Initial number of averages
+        """
+        # Only used if adaptive_averaging == False
+        Jctrl.vna_averages = Navg_init if Navg_init else 1
+
+        time_per_sweep = Jctrl.vna_points / (1e3 * Jctrl.vna_ifband)
+        print(f'powers: {powers}')
+
+        """
+        Expected runtime for power sweep
+        if using the estimated runtime option
+        """
+        total_time_hr = runtime
+        if Jctrl.adaptive_averaging:
+            if Navg_init:
+                Navg_adaptive = Navg_init
+                runtime_est = Jctrl.estimate_time_adaptive_averages(
+                                time_per_sweep,
+                                powers,
+                                Navg_adaptive)
+                print('\n---------------------------------------')
+                print(f'\nEstimated run-time: {runtime_est} hr\n')
+                print('---------------------------------------\n')
+
+            else:
+                Navg_adaptive = Jctrl.estimate_init_adaptive_averages(
+                        time_per_sweep, 
+                        powers,
+                        total_time_hr)
+
+            Jctrl.vna_averages = Navg_adaptive
+
+        # Set the segment data
+        if is_segmented:
+            fscale = 1e9 if fc < 1e9 else 1.
+            span *= 1e-3
+            fstart = fc - span / 2
+            fstop  = fc + span / 2
+            fa = fstart + offresfraction * span / 2
+            fb = fstop  - offresfraction * span / 2
+
+            # segments = compute_homophasal_segments()
+            p = p1
+            segments = compute_segments(fc, span, p, pc, beta, 
+                    fscale, Noffres, offresfraction, option=use_homophasal)
+            # Q = 10 * (fc / span)
+            # if use_homophasal == 'homophasal':
+            #     theta0 = np.pi / 32
+            #     Nf = 30
+            #     theta = np.linspace(-np.pi + theta0, (np.pi - theta0), Nf + 2)
+            #     freq = fc * (1 - 0.5 * np.tan(theta / 2) / Q)
+            #     segments = [f',1,2,{ff1*fscale},{ff2*fscale}'
+            #             for ff1, ff2 in zip(freq[0::2], freq[1::2])]
+            # elif use_homophasal == 'hybrid':
+            #     theta0 = np.pi / 32
+            #     Nf = 20
+            #     theta = np.linspace(-np.pi + theta0, (np.pi - theta0), Nf + 2)
+            #     freq = fc * (1 - 0.5 * np.tan(theta / 2) / Q)
+
+            #     np.set_printoptions(precision=4)
+
+            #     # Homophasal, near resonance
+            #     hsegments = [f',1,2,{ff1*fscale},{ff2*fscale}'
+            #             for ff1, ff2 in zip(freq[0::2], freq[1::2])][1:-1]
+            #     fap = np.min(freq[1:-1]) * fscale
+            #     fbp = np.max(freq[1:-1]) * fscale
+
+            #     segments = [f',1,{Noffres},{fstop*fscale}, {fbp}',
+            #                 *hsegments,
+            #                 f',1,{Noffres},{fap},{fstart*fscale}']
+            # else:
+            #     segments = [f',1,5,{fstart*fscale},{fa*fscale}',
+            #                 f',1,41,{fa*fscale},{fb*fscale}',
+            #                 f',1,5,{fb*fscale},{fstop*fscale}']
+            #     print(f'[{fstart}, {fa}], [{fa}, {fb}], [{fb}, {fstop}] GHz')
+        else:
+            segments = None
+
+        # Read the MXC temperature from the CMN
+        Z, T, tstamp = Jctrl.read_cmn()
+        print(f'{tstamp}, {Z} ohms, MXC CMN: {T*1e3:.2f} mK')
+        
+        # Read the flow rate
+        flow_V, flow_umol_s1, tstamp = Jctrl.read_flow_meter()
+        print(f'{tstamp}, {flow_V} V, {flow_umol_s1:.2f} umol / s')
+        
+        # Read and report all temperatures a pressures
+        Jctrl.read_temp('all')
+        Jctrl.read_pressure('all')
+        
+        # Enter a sample name and perform the PNA power sweep
+        ## Note: adaptive_averaging will increase the averages
+        ##       by a factor 10^(dp / 10), where dp is the power
+        ##       step in the power sweep -- ~1.7 for dp = 5 dBm
+        if start_delay > 0:
+            print(f'Delayed start of {start_delay} hr ...')
+            Jctrl.close_socket()
+            time.sleep(start_delay * h2s)
+        out = {}
+        Jctrl.pna_process('meas', T, out, prefix=sample_name,
+                          adaptive_averaging=adaptive_averaging,
+                          cal_set=cal_set, setup_only=False, segments=segments)
+
+        del Jctrl
 
 
 if __name__ == '__main__':
