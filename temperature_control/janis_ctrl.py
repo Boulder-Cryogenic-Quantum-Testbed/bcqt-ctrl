@@ -36,7 +36,7 @@ import numpy as np
 import errno
 
 import sys
-sys.path.append(r'C:\Users\Lehnert Lab\GitHub\bcqt-ctrl\pna_control')
+sys.path.append(r'C:\Users\68707\Documents\bcqt\bcqt-ctrl\pna_control')
 import pna_control as PNA
 import os
 
@@ -55,7 +55,8 @@ class JanisCtrl(object):
         self.init_socket = True
 
         # Set the default VNA address
-        self.vna_addr = 'TCPIP0::K-N5222B-21927::hislip0,4880::INSTR'
+        # self.vna_addr = 'TCPIP0::K-N5222B-21927::hislip0,4880::INSTR'
+        self.vna_addr = 'TCPIP0::68707CRYOCNTRL::hislip_PXI10_CHASSIS1_SLOT1_INDEX0,4880::INSTR'
 
         # Set as True to start the PID controller, then set to False to allow
         # for updates to the PID values from the previous temperature set point
@@ -180,6 +181,8 @@ class JanisCtrl(object):
         Reads the CMN temperature sensor and returns the sensor impedance,
         temperature in K and timestamp
         """
+        if self.bypass_janis:
+            return 0., 9e-3, 0.
         self.tcp_send('readCMNTemp(9)')
         data = self.tcp_recv()
         err = False
@@ -211,6 +214,9 @@ class JanisCtrl(object):
         """
         Reads the temperature of one of the channels from the Lakeshore
         """
+        if self.bypass_janis:
+            return None, None, None
+
         if channel_name == 'all':
             for key, ch in self.channel_dict.items():
 
@@ -244,6 +250,8 @@ class JanisCtrl(object):
         Reads the flow meter and returns the flow rate in volts, umol / s, and
         the timestamp
         """
+        if self.bypass_janis:
+            return 0., 0., 0.
         self.tcp_send('readFlow(1)')
         data = self.tcp_recv()
         flow_V, flow_umol_s1, tstamp, status = data.split(',')
@@ -262,6 +270,8 @@ class JanisCtrl(object):
         """
         Reads the temperature of one of the channels from the Lakeshore
         """
+        if self.bypass_janis:
+            return 0., 0., 0.
         all_channels = [1, 2, 3, 4]
         if channel == 'all':
             for ch in all_channels:
@@ -634,7 +644,8 @@ class JanisCtrl(object):
                     adaptive_averaging=adaptive_averaging,
                     cal_set=cal_set,
                     setup_only=setup_only,
-                    segments=segments)
+                    segments=segments,
+                    instr_addr=self.vna_addr)
 
         else:
             PNA.power_sweep(self.vna_startpower, self.vna_endpower,
@@ -644,7 +655,8 @@ class JanisCtrl(object):
                     adaptive_averaging=adaptive_averaging,
                     cal_set=cal_set,
                     setup_only=setup_only,
-                    segments=segments)
+                    segments=segments,
+                    instr_addr=self.vna_addr)
 
         out[idx] = 0
 
@@ -979,7 +991,7 @@ def measure_multiple_resonators(fcs, spans, delays, powers,
         Jctrl = JanisCtrl(Tstart, Tstop, dT,
                 sample_time=sample_time, T_eps=T_eps,
                 therm_time=therm_time,
-                init_socket=True, bypass_janis=False,
+                init_socket=True, bypass_janis=True,
                 adaptive_averaging=adaptive_averaging)
 
         """
