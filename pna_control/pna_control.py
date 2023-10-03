@@ -251,7 +251,9 @@ def power_sweep(startpower: float,
                 adaptive_averaging : bool = True,
                 cal_set : str = None,
                 setup_only : bool = False,
-                segments : list = None):
+                segments : list = None, 
+                instr_addr : str = 'TCPIP0::K-N5222B-21927::hislip0,4880::INSTR'):
+
     '''
     run a power sweep for specified power range with a certain number of sweeps
     '''
@@ -288,7 +290,8 @@ def power_sweep(startpower: float,
         print(f'{i} dBm, {averages//1} averages ...')
         get_data(centerf, span, temp, averages, i, edelay, ifband, points,
                 sample_id, sparam=sparam, cal_set=cal_set,
-                setup_only=setup_only, segments=segments)
+                setup_only=setup_only, segments=segments,
+                 instr_addr=instr_addr)
         if adaptive_averaging: 
             averages = averages * ((10**(stepsize/10))**0.5)
     print('Power sweep completed.')
@@ -320,7 +323,7 @@ def timestamp_folder(dir: str = None, centerf = None, sample_id:
     """
     now = time.strftime("%y%m%d", time.localtime())
 
-    output =f'{sample_id}_{centerf:.3f}GHz_{now}'
+    output =f'{sample_id}_{centerf:.3f}GHz'
     output = output.replace('.','p')
     
     if dir != None:
