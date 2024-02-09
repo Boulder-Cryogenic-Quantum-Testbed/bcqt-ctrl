@@ -7,7 +7,8 @@ plt.rcParams['savefig.facecolor']='white'
 def loadVNA(FileList):
     """
     The data structure anticipated is single line header of columns with columns units in freq [Ghz], Power [dB], Phase [rad].
-    The data phase will be corrected without request if the phase exceeds 10 'degree' into radians.  
+    The data phase will be corrected without request if the phase exceeds 10 'degree' into radians. The data frequency will be
+    corrected without request if the frequency exceeds 20 Hz to GHz (assumes resonator tones are <20 GHz).  
     Input: 
         FileList, list of full path file names to csv data
     Output:
@@ -33,12 +34,29 @@ def loadVNA(FileList):
                 print('Starting point is not in first 10 rows')
                 break
         for ll, line in enumerate(np.transpose(host[start:]).astype(float)):
-            if (ll==2) & (10<=np.max(np.abs(line))):
+            if (ll==2)&(10<=np.max(np.abs(line))):
                 line=line*np.pi/180 # Change phase units to radians
             if (ll==2):
                 line = np.unwrap(line)
+            if (ll==0)&(20<line):
+                line = 1e-9*line
             data[key][column[ll]]=line
     return data
+
+def electronicDelayCorrection(freq, phase, delay):
+    """
+    Applies electronic delay to phase so that unwrap and linear correction does not need to be applied to 
+    the phase data. This is not currently implemented in the code but I have found it very helpful in other 
+    parts of the modeling. 
+    Input: 
+        freq, array of frequency in either (G)Hz, must be matched with delay units.
+        phase, array of uncorrected S21 phase data in units of radians.
+        delay, float of electrical delay to correct for length of lines to device in units of (n)sec,
+               must be matched with freq units.
+    Output:
+        Array of corrected phase data in units of radians.
+    """
+    return np.angle(np.exp(1j*phase+2j*np.pi*freq*delay))
 
 def pulse_filter(yaxis, gap = 25, length = 55):
     """
@@ -164,14 +182,11 @@ def plot_tones(faxis, Aaxis, Paxis, feature, erevise, fthresh, span = 0.050, gap
 
 if __name__ == "__main__":
     #change paths here to direct you to your data set for testing purposes.
-    run = 65
-    path = '/mnt/c/Users/ponc892/OneDrive - PNNL/Documents/PNNL/BlueFors-Operations/'
-    path = [line for line in glob.glob(path+'*') if f'Run_{run}' in line][0]+'/'
-    path = path+'Processed/Merged_Files'
-
-    grandparent = glob.glob(path+'/*')[-3:-2]
+    path = '/path/to/file/'
+    grandparent = glob.glob(path+'/*')
+    # End local changes
+    
     host=loadVNA(grandparent)
-
     host = host[list(host.keys())[0]]
     faxis=1e-9*host['Freq_Hz']
     Aaxis=host['Amp_dB']
