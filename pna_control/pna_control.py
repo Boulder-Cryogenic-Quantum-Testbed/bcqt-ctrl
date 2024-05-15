@@ -49,6 +49,7 @@ def pna_setup(pna,
 
     '''
     # Send a preset command to the VNA and turn off the RF power
+    print("  Reinitializing PNA")
     pna.write('SYSTem:FPRESet')
     time.sleep(0.01)
     pna.write('OUTPut:STATe OFF')
@@ -116,9 +117,10 @@ def read_data(pna, points, sample_id, power, temp, centerf, segments : list = No
     '''
     function to read in data from the pna and output it into a file
     '''
+    
     #read in frequency
     cfreq = float(pna.query('SENSe1:FREQuency:CENTER?')) / 1e9
-
+    
     # This obviates the need for points as an input
     if segments:
         # Read the list of all segments
@@ -151,8 +153,8 @@ def read_data(pna, points, sample_id, power, temp, centerf, segments : list = No
     #create a new directory for the output to be put into
     directory_name = timestamp_folder(os.getcwd(), centerf, sample_id)
     if not os.path.exists(directory_name):
-        print(f'directory_name: {directory_name}')
-        print(f'Does not exist.')
+        print(f'  directory_name: {directory_name}')
+        print(f'  Does not exist. Making new directory.')
         os.mkdir(directory_name)
 
     #open output file and put data points into the file
@@ -168,6 +170,7 @@ def read_data(pna, points, sample_id, power, temp, centerf, segments : list = No
 def get_data(centerf: float, 
             span: float, 
             temp: float, 
+            outputfile: str = None,
             averages: int = 100, 
             power: float = -30, 
             edelay: float = 40, 
@@ -187,22 +190,23 @@ def get_data(centerf: float,
 
     #set up the PNA to measure s21 for the specific instrument GPIB0::16::INSTR
     rm = pyvisa.ResourceManager()
-    GPIB_addr = 'GPIB0::16::INSTR'
+    keysight = rm.open_resource(instr_addr)
 
     # handle failure to open the GPIB resource #this is an issue when connecting
     # to the PNA-X from newyork rather than ontario
-    try:
-        keysight = rm.open_resource(instr_addr)
-
-        ## Attempt to fix the timeout error in averaging command
-        keysight.timeout = None
-        # keysight = rm.open_resource('GPIB0::16::INSTR')
-    except Exception as ex:
-        print(f'\n----------\nException:\n{ex}\n----------\n')
-        print(f'Trying GPIB address {GPIB_addr} ...')
-        keysight = rm.open_resource(GPIB_addr)
+    # try:
         # keysight = rm.open_resource(instr_addr)
 
+        ## Attempt to fix the timeout error in averaging command
+        # keysight.timeout = None
+        # keysight = rm.open_resource('GPIB0::16::INSTR')
+        
+    # except Exception as ex:
+    #     print(f'\n----------\nException:\n{ex}\n----------\n')
+    #     print(f'Trying GPIB address {GPIB_addr} ...')
+    #     keysight = rm.open_resource(GPIB_addr)
+        # keysight = rm.open_resource(instr_addr)
+    print("  Setting up PNA.")
     pna_setup(keysight, points, centerf, span, ifband, power, edelay, averages,
               sparam=sparam, cal_set=cal_set, segments=segments)
 
@@ -216,23 +220,32 @@ def get_data(centerf: float,
     keysight.write('FORMat ASCII')
 
     #wait until the averages are done being taken then read in the data
-    count = 10000000
+    count = 10
     cnt = 0
     while(count > 0):
         count = count - 1
+        print("count: ", count)
     while(True):
+        print(keysight.query('STAT:OPER:AVER1:COND?'))
+        time.sleep(1)
         if (keysight.query('STAT:OPER:AVER1:COND?')[1] != "0"):
+            print("cnt: ", cnt)
             cnt += 1
-            break;
-            
+            break
+    
+    print("  sending OPC?")
     keysight.query('*OPC?')
+    print("  sending *WAI?")
     keysight.write('*WAI')
     time.sleep(3.0)
+    print("  sending HOLD")
     keysight.write('SYSTem:CHANnels:HOLD')
 
+    print("  Reading PNA Data.")
     read_data(keysight, points, sample_id, power, temp,
             centerf, segments=segments)
 
+    print("  Finished reading, shutting off output.")
     keysight.write('SYSTem:CHANnels:RESume')
     keysight.write('OUTPut:STATe OFF')
 
@@ -260,13 +273,13 @@ def power_sweep(startpower: float,
 
     #create an array with the values of power for each sweep
     if np.isclose(startpower, endpower):
-        print(f'Running only one power {startpower} dBm ...')
+        print(f'  Running only one power {startpower} dBm ...')
         sweeps = [startpower]
         stepsize = 0
     else:
         sweeps = np.linspace(startpower, endpower, numsweeps)
         stepsize = sweeps[0]-sweeps[1]
-    print(f'Measuring {sparam} ...')
+    print(f'  Measuring {sparam} ...')
 
     # #write an output file with conditions
     # with open(directory_name+'/'+'conditions.csv',"w") as file:

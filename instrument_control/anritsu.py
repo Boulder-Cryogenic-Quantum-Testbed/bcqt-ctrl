@@ -9,7 +9,10 @@ Date:   220728
 
 import pyvisa
 import sys
-sys.path.append(r'C:\Users\Lehnert Lab\GitHub\bcqt-ctrl\pna_control')
+
+# sys.path.append(r'../')  # instrument_control
+# sys.path.append(r'../pna_control/')  
+
 import pna_control as pna
 import numpy as np
 import datetime
@@ -18,16 +21,24 @@ class AnritsuCtrl(object):
     """
     Class that implements the Anritsu SCPI control
     """
-    def __init__(self, *args, **kwargs):
+    def __init__(self, anritsu_addr, vna_addr, 
+                       rm_backend = None, *args, **kwargs):
         """
         Class constructor
+        
+        'rm_backend' = None or '@py', use default pyvisa or use pyvisa-py
+        
         """
         # Default instrument addresses GPIB, TCPIP
-        self.anritsu_addr = 'GPIB::5::INSTR'
-        self.vna_addr = 'TCPIP0::K-N5222B-21927::hislip0,4880::INSTR'
+        self.anritsu_addr = anritsu_addr
+        self.vna_addr = vna_addr
 
         # Open the pyvisa resource manager 
-        self.rm = pyvisa.ResourceManager()
+        if rm_backend is not None:
+            self.rm = pyvisa.ResourceManager(rm_backend)
+        else:
+            self.rm = pyvisa.ResourceManager()
+            
         self.dstr = datetime.datetime.today().strftime('%y%m%d')
 
         # Set the precision on the frequency string
@@ -95,7 +106,7 @@ class AnritsuCtrl(object):
                      edelay = vna_dict['edelay'],
                      ifband = vna_dict['ifbw'],
                      points = vna_dict['npts'],
-                     outputfile = outputfile,
+                    #  outputfile = outputfile,
                      sparam = vna_dict['sparam'],
                      cal_set = vna_dict['cal_set'],
                      instr_addr = self.vna_addr)
@@ -177,9 +188,10 @@ class AnritsuCtrl(object):
         vna_dict        :dict:    parameters to pass to VNA 
 
         """
+        
         # Set the power
         self.write_check(f'SOUR:FREQ:CW {freq} GHZ') 
-
+        
         print(f'Sweeping powers {sweep_powers} dBm at {freq} GHz ...')
         fndigits = self.fndigits
 
