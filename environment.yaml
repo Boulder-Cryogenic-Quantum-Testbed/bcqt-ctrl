@@ -1,0 +1,19 @@
+name: bcqt-ctrl
+channels:
+  - conda-forge
+dependencies:
+  - ca-certificates
+  - certifi
+  - ipykernel
+  - ipython
+  - matplotlib
+  - numpy
+  - openssl
+  - pandas
+  - pyro4
+  - python=3.12.3
+  - scipy
+  - pyvisa
+  - pyvisa-py
+  - zeroconf
+prefix: /home/bcqt/miniforge3/envs/bcqt-ctrl
