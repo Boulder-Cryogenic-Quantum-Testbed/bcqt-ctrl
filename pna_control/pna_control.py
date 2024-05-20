@@ -151,7 +151,7 @@ def read_data(pna, points, sample_id, power, temp, centerf, segments : list = No
     mag = pna.query_ascii_values('CALCulate1:DATA? FDATA', container=np.array)
 
     #create a new directory for the output to be put into
-    directory_name = timestamp_folder(os.getcwd(), centerf, sample_id)
+    directory_name = timestamp_folder(os.getcwd(), centerf=None, sample_id=sample_id)
     if not os.path.exists(directory_name):
         print(f'  directory_name: {directory_name}')
         print(f'  Does not exist. Making new directory.')
@@ -168,22 +168,21 @@ def read_data(pna, points, sample_id, power, temp, centerf, segments : list = No
     file.close()
 
 def get_data(centerf: float, 
-            span: float, 
-            temp: float, 
-            outputfile: str = None,
-            averages: int = 100, 
-            power: float = -30, 
-            edelay: float = 40, 
-            ifband: float = 5, 
-            points: int = 201, 
-            sample_id: str = 'sample',
-            # instr_addr : str = 'GPIB::16::INSTR', # If using GPIB
-            # instr_addr : str = 'TCPIP0::69.254.35.52::islip0::INSTR1', # Old address from JILA lab
-            instr_addr : str = 'TCPIP0::K-N5222B-21927::hislip0,4880::INSTR',
-            sparam : str = 'S12',
-            cal_set : str = None,
-            setup_only : bool = False,
-            segments : list = None):
+             span: float, 
+             temp: float, 
+             outputfile: str = None,
+             averages: int = 100, 
+             power: float = -30, 
+             edelay: float = 40, 
+             ifband: float = 5, 
+             points: int = 201, 
+             sample_id: str = 'sample',
+             instr_addr : str = 'TCPIP0::169.254.89.124::hislip0::INSTR',  # should never be defaulted :)
+             sparam : str = 'S12',
+             cal_set : str = None,
+             setup_only : bool = False,
+             segments : list = None,
+             debug : bool = False):
     '''
     function to get data and put it into a user specified file
     '''
@@ -206,6 +205,7 @@ def get_data(centerf: float,
     #     print(f'Trying GPIB address {GPIB_addr} ...')
     #     keysight = rm.open_resource(GPIB_addr)
         # keysight = rm.open_resource(instr_addr)
+        
     print("  Setting up PNA.")
     pna_setup(keysight, points, centerf, span, ifband, power, edelay, averages,
               sparam=sparam, cal_set=cal_set, segments=segments)
@@ -224,21 +224,23 @@ def get_data(centerf: float,
     cnt = 0
     while(count > 0):
         count = count - 1
-        print("count: ", count)
+        if debug: print("count: ", count)
     while(True):
         print(keysight.query('STAT:OPER:AVER1:COND?'))
         time.sleep(1)
         if (keysight.query('STAT:OPER:AVER1:COND?')[1] != "0"):
-            print("cnt: ", cnt)
+            # print("cnt: ", cnt)
             cnt += 1
             break
     
-    print("  sending OPC?")
+    if debug:  print("  sending OPC?")
     keysight.query('*OPC?')
-    print("  sending *WAI?")
+    
+    if debug:  print("  sending *WAI?")
     keysight.write('*WAI')
     time.sleep(3.0)
-    print("  sending HOLD")
+    
+    if debug: print("  sending HOLD")
     keysight.write('SYSTem:CHANnels:HOLD')
 
     print("  Reading PNA Data.")
@@ -248,6 +250,8 @@ def get_data(centerf: float,
     print("  Finished reading, shutting off output.")
     keysight.write('SYSTem:CHANnels:RESume')
     keysight.write('OUTPut:STATe OFF')
+    
+    if debug: print(f"finished power = {power}")
 
 def power_sweep(startpower: float, 
                 endpower: float, 
@@ -265,7 +269,8 @@ def power_sweep(startpower: float,
                 cal_set : str = None,
                 setup_only : bool = False,
                 segments : list = None, 
-                instr_addr : str = 'TCPIP0::K-N5222B-21927::hislip0,4880::INSTR'):
+                instr_addr : str = 'TCPIP0::K-N5222B-21927::hislip0,4880::INSTR',
+                config_file : bool = False):
 
     '''
     run a power sweep for specified power range with a certain number of sweeps
@@ -281,32 +286,48 @@ def power_sweep(startpower: float,
         stepsize = sweeps[0]-sweeps[1]
     print(f'  Measuring {sparam} ...')
 
-    # #write an output file with conditions
-    # with open(directory_name+'/'+'conditions.csv',"w") as file:
-    #     file.write('# Parameter, Value, Units\n')
-    #     file.write(f'SPARAM, {sparam}, \n')
-    #     file.write(f'CALSET, {cal_set}, \n')
-    #     file.write(f'STARTPOWER, {startpower}, dB\n')
-    #     file.write(f'ENDPOWER, {endpower}, dB\n')
-    #     file.write(f'NUMSWEEPS, {numsweeps}, \n')
-    #     file.write(f'CENTERF, {centerf}, GHz\n')
-    #     file.write(f'SPAN, {span}, MHz\n')
-    #     file.write(f'TEMP, {temp:.3f}, mK\n')
-    #     file.write(f'STARTING AVERAGES, {averages}\n')
-    #     file.write(f'EDELAY, {edelay}, ns\n')
-    #     file.write(f'IFBAND, {ifband}, kHz\n')
-    #     file.write(f'POINTS, {points}, \n')
-    #     file.close()
+    #write an output file with conditions
+    if config_file == True:
+        directory_name = timestamp_folder(dir=os.getcwd(), centerf=centerf,  sample_id=sample_id)
+        with open(directory_name +'/'+'conditions.csv',"w") as file:
+            file.write('# Parameter, Value, Units\n')
+            file.write(f'SPARAM, {sparam}, \n')
+            file.write(f'CALSET, {cal_set}, \n')
+            file.write(f'STARTPOWER, {startpower}, dB\n')
+            file.write(f'ENDPOWER, {endpower}, dB\n')
+            file.write(f'NUMSWEEPS, {numsweeps}, \n')
+            file.write(f'CENTERF, {centerf}, GHz\n')
+            file.write(f'SPAN, {span}, MHz\n')
+            file.write(f'TEMP, {temp:.3f}, mK\n')
+            file.write(f'STARTING AVERAGES, {averages}\n')
+            file.write(f'EDELAY, {edelay}, ns\n')
+            file.write(f'IFBAND, {ifband}, kHz\n')
+            file.write(f'POINTS, {points}, \n')
+            file.close()
 
     #run each sweep
     for i in sweeps:
         print(f'{i} dBm, {averages//1} averages ...')
-        get_data(centerf, span, temp, averages, i, edelay, ifband, points,
-                sample_id, sparam=sparam, cal_set=cal_set,
-                setup_only=setup_only, segments=segments,
-                 instr_addr=instr_addr)
+        
+        get_data(centerf = centerf, 
+                    span = span, 
+                    temp = temp, 
+                    outputfile = None,
+                    averages = averages, 
+                    power = i, 
+                    edelay = edelay, 
+                    ifband = ifband, 
+                    points = points, 
+                    sample_id = sample_id,
+                    instr_addr = instr_addr, 
+                    sparam = sparam,
+                    cal_set = cal_set,
+                    setup_only = setup_only,
+                    segments = segments)
+            
         if adaptive_averaging: 
             averages = averages * ((10**(stepsize/10))**0.5)
+            
     print('Power sweep completed.')
 
 
@@ -321,8 +342,7 @@ def name_datafile(sample_id: str,
 
     return filename
     
-def timestamp_folder(dir: str = None, centerf = None, sample_id:
-        str='powersweep') -> str:
+def timestamp_folder(dir: str = None, centerf = None, sample_id: str='powersweep') -> str:
     """Create a filename and directory structure to annotate the scan.
 
         Takes a root directory, appends scan type and timestamp.
@@ -336,9 +356,11 @@ def timestamp_folder(dir: str = None, centerf = None, sample_id:
     """
     now = time.strftime("%y%m%d", time.localtime())
 
-    output =f'{sample_id}_{centerf:.3f}GHz'
-    output = output.replace('.','p')
-    
+    if centerf != None:
+        output =f'{now}_{sample_id}_{centerf:.3f}GHz'
+        output = output.replace('.','p')
+    else:
+        output = f'{now}_{sample_id}'
     if dir != None:
         output_path = os.path.join(dir, output)
     else:
