@@ -36,8 +36,8 @@ import numpy as np
 import errno
 
 import sys
-sys.path.append(r'C:\Users\68707\Documents\bcqt\bcqt-ctrl\pna_control')
-import pna_control as PNA
+# sys.path.append(r'C:\Users\68707\Documents\bcqt\bcqt-ctrl\pna_control')
+import pna_control.pna_control as PNA
 import os
 
 
@@ -45,7 +45,7 @@ class JanisCtrl(object):
     """
     Class that implments the Janus temperature controller
     """
-    def __init__(self, Tstart, Tstop, dT, *args, **kwargs):
+    def __init__(self, Tstart, Tstop, dT, instr_addr = None, *args, **kwargs):
         """
         Class constructor
         """
@@ -55,14 +55,19 @@ class JanisCtrl(object):
         self.init_socket = True
 
         # Set the default VNA address
-        # self.vna_addr = 'TCPIP0::K-N5222B-21927::hislip0,4880::INSTR'
-        self.vna_addr = 'TCPIP0::68707CRYOCNTRL::hislip_PXI10_CHASSIS1_SLOT1_INDEX0,4880::INSTR'
+        # self.instr_addr = 'TCPIP0::K-N5222B-21927::hislip0,4880::INSTR'
+        # self.instr_addr = 'TCPIP0::68707CRYOCNTRL::hislip_PXI10_CHASSIS1_SLOT1_INDEX0,4880::INSTR'
+        if instr_addr == None:
+            self.instr_addr = 'TCPIP0::169.254.89.124::inst0::INSTR'
+        else:
+            self.instr_addr = instr_addr
+            
 
         # Set as True to start the PID controller, then set to False to allow
         # for updates to the PID values from the previous temperature set point
         self.is_pid_init = True
         self.pid_values = None
-        self.bypass_janis = False
+        self.bypass_janis = True
 
         # Default thermalization time
         self.therm_time = 300. # Wait extra 5 minutes to thermalize [s]
@@ -645,7 +650,7 @@ class JanisCtrl(object):
                     cal_set=cal_set,
                     setup_only=setup_only,
                     segments=segments,
-                    instr_addr=self.vna_addr)
+                    instr_addr=self.instr_addr)
 
         else:
             PNA.power_sweep(self.vna_startpower, self.vna_endpower,
@@ -656,7 +661,7 @@ class JanisCtrl(object):
                     cal_set=cal_set,
                     setup_only=setup_only,
                     segments=segments,
-                    instr_addr=self.vna_addr)
+                    instr_addr=self.instr_addr)
 
         out[idx] = 0
 
@@ -692,7 +697,7 @@ class JanisCtrl(object):
                          outputfile = sampleid+'.csv',
                          sparam = self.sparam,
                          cal_set = cal_set,
-                         instr_addr = self.vna_addr)
+                         instr_addr = self.instr_addr)
 
             # Move to the next starting position
             f0 += frequency_chunk_size / 1e9
