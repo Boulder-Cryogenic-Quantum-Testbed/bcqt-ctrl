@@ -1,15 +1,10 @@
 # -*- encoding: utf-8 -*-
 """
-User code to fit S21 data for the Mines Al 6061 3D Cavity
-Data collection information:
----------------------------
-Collector: Dave Pappas
-VNA: Keysight PNA
-Date collected: 210430
-Purpose: Collect power and power dependence of cavity resonance
-         with a SiOx sample loaded
----------------------------
+--- updated in the bcqt-ctrl git repo 5/24 by Jorge
+Original Author: Dave Pappas ???  
+
 """
+
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd #speadsheet commands
@@ -28,9 +23,11 @@ pathToParent = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # XXX: You may need to add measurement/resfit to your path if it is not
 #      installed in a standard location.
 # Set a variable that equals the relative path of parent directory
-path_to_resfit = 'C:\\Users\\Lehnert Lab\\Github\\scresonators'
+
+print(f"Loading user_fit from: {pathToParent}")
+path_to_resfit = r'E:\Github\scresonators'
 pglob = glob.glob(path_to_resfit)
-assert len(pglob), f'Path: {path_to_resfit} does not exist'
+assert len(pglob), f'Path: {path_to_resfit} does not exist, please specify path to scresonators'
 sys.path.append(path_to_resfit)
 
 import fit_resonator.resonator as res
@@ -453,10 +450,10 @@ def power_sweep_fit_drv(atten=[0, -60], sample_name=None,
     powers += sum(atten)
 
     def pdBm_to_navg_ticks(p):
-    	n = power_to_navg(powers[0::2], Qi[0::2], Qc[0], fc[0])
-    	labels = [r'$10^{%.2g}$' % x for x in np.log10(n)]
-    	print(f'labels:\n{labels}')
-    	return labels
+        n = power_to_navg(powers[0::2], Qi[0::2], Qc[0], fc[0])
+        labels = [r'$10^{%.2g}$' % x for x in np.log10(n)]
+        print(f'labels:\n{labels}')
+        return labels
 
     # Fit the TLS loss
     # tcmp = regex.compile('[0-9]+.[0-9]+')
