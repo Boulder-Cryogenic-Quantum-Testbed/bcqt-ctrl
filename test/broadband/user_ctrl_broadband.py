@@ -44,11 +44,15 @@ def measure_multiple_resonators(fcs, spans, delays, powers,
         #print(datetime.now().strftime("%H:%M:%S"))
         # Create the JanisCtrl 
 
-        Jctrl = JanisCtrl(Tstart, Tstop, dT,
-                sample_time=sample_time, T_eps=T_eps,
-                therm_time=therm_time,
-                init_socket=True, bypass_janis=False,
-                adaptive_averaging=adaptive_averaging)
+        Jctrl = JanisCtrl(Tstart = Tstart, 
+                          Tstop = Tstop, 
+                          dT = dT,
+                          sample_time = sample_time, 
+                          T_eps = T_eps,
+                          therm_time = therm_time,
+                          init_socket = True, 
+                          bypass_janis = True,
+                          adaptive_averaging = adaptive_averaging)
 
         """
         Change these settings for each power sweep
