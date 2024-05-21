@@ -102,18 +102,20 @@ def pna_setup(pna,
     pna.write('SENSe1:AVERage:STATe ON')
     pna.write(f'SENSe1:BANDwidth {ifband}KHZ')
 
-    #ensure at least 10 averages are taken
+    #ensure at least 3 averages are taken
     #if(averages < 10):
     #    averages = 10
-    if(averages <= 1):
-        averages = 3
+    # if(averages <= 1):
+    #     averages = 3
 
     # Convert averages to integer
-    averages = averages//1
+    # averages = averages//1
+    print("# of averages: ", averages)
     pna.write('SENSe1:AVERage:Count {}'.format(averages))
 
+
 def read_data(pna, points, sample_id, power, temp, centerf, segments : list = None,
-        overwrite : bool = True):
+        overwrite : bool = True, output_folder : str = None):
     '''
     function to read in data from the pna and output it into a file
     '''
@@ -151,9 +153,13 @@ def read_data(pna, points, sample_id, power, temp, centerf, segments : list = No
     mag = pna.query_ascii_values('CALCulate1:DATA? FDATA', container=np.array)
 
     #create a new directory for the output to be put into
-    directory_name = timestamp_folder(os.getcwd(), centerf=None, sample_id=sample_id)
+    if output_folder == None:
+        directory_name = timestamp_folder(os.getcwd(), centerf=None, sample_id=sample_id)
+    else:
+        directory_name = output_folder
+        
+    print(f'  directory_name: {directory_name}')
     if not os.path.exists(directory_name):
-        print(f'  directory_name: {directory_name}')
         print(f'  Does not exist. Making new directory.')
         os.mkdir(directory_name)
 
@@ -167,6 +173,7 @@ def read_data(pna, points, sample_id, power, temp, centerf, segments : list = No
         count = count + 1
     file.close()
 
+
 def get_data(centerf: float, 
              span: float, 
              temp: float, 
@@ -177,24 +184,29 @@ def get_data(centerf: float,
              ifband: float = 5, 
              points: int = 201, 
              sample_id: str = 'sample',
-             instr_addr : str = 'TCPIP0::169.254.89.124::hislip0::INSTR',  # should never be defaulted :)
+             pna_addr : str = 'TCPIP0::169.254.89.124::hislip0::INSTR',  # should never be defaulted :)
              sparam : str = 'S12',
              cal_set : str = None,
              setup_only : bool = False,
              segments : list = None,
-             debug : bool = False):
+             debug : bool = False,
+             output_folder : str = None):
     '''
     function to get data and put it into a user specified file
     '''
 
     #set up the PNA to measure s21 for the specific instrument GPIB0::16::INSTR
     rm = pyvisa.ResourceManager()
-    keysight = rm.open_resource(instr_addr)
+    keysight = rm.open_resource(pna_addr)
 
+    # clear existing errors
+    # TODO: more robust error checking :)
+    keysight.write('*CLS')
+    
     # handle failure to open the GPIB resource #this is an issue when connecting
     # to the PNA-X from newyork rather than ontario
     # try:
-        # keysight = rm.open_resource(instr_addr)
+        # keysight = rm.open_resource(pna_addr)
 
         ## Attempt to fix the timeout error in averaging command
         # keysight.timeout = None
@@ -204,9 +216,11 @@ def get_data(centerf: float,
     #     print(f'\n----------\nException:\n{ex}\n----------\n')
     #     print(f'Trying GPIB address {GPIB_addr} ...')
     #     keysight = rm.open_resource(GPIB_addr)
-        # keysight = rm.open_resource(instr_addr)
+    # keysight = rm.open_resource(pna_addr)
         
-    print("  Setting up PNA.")
+    # print("  Setting up PNA, waiting 0.1 seconds.")
+    
+    
     pna_setup(keysight, points, centerf, span, ifband, power, edelay, averages,
               sparam=sparam, cal_set=cal_set, segments=segments)
 
@@ -245,7 +259,7 @@ def get_data(centerf: float,
 
     print("  Reading PNA Data.")
     read_data(keysight, points, sample_id, power, temp,
-            centerf, segments=segments)
+            centerf, segments=segments, output_folder = output_folder)
 
     print("  Finished reading, shutting off output.")
     keysight.write('SYSTem:CHANnels:RESume')
@@ -269,8 +283,10 @@ def power_sweep(startpower: float,
                 cal_set : str = None,
                 setup_only : bool = False,
                 segments : list = None, 
-                instr_addr : str = 'TCPIP0::K-N5222B-21927::hislip0,4880::INSTR',
-                config_file : bool = False):
+                pna_addr : str = 'TCPIP0::K-N5222B-21927::hislip0,4880::INSTR',
+                config_file : bool = False,
+                debug : bool = False,
+                output_folder : str = None):
 
     '''
     run a power sweep for specified power range with a certain number of sweeps
@@ -319,11 +335,13 @@ def power_sweep(startpower: float,
                     ifband = ifband, 
                     points = points, 
                     sample_id = sample_id,
-                    instr_addr = instr_addr, 
+                    pna_addr = pna_addr, 
                     sparam = sparam,
                     cal_set = cal_set,
                     setup_only = setup_only,
-                    segments = segments)
+                    segments = segments,
+                    debug = debug,
+                    output_folder = output_folder)
             
         if adaptive_averaging: 
             averages = averages * ((10**(stepsize/10))**0.5)
@@ -341,6 +359,7 @@ def name_datafile(sample_id: str,
     filename = filename.replace('.','p')
 
     return filename
+    
     
 def timestamp_folder(dir: str = None, centerf = None, sample_id: str='powersweep') -> str:
     """Create a filename and directory structure to annotate the scan.
