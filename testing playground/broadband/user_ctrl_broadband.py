@@ -116,17 +116,3 @@ def measure_multiple_resonators(fcs, spans, delays, powers,
                           adaptive_averaging=adaptive_averaging,
                           cal_set=cal_set, setup_only=False)
         del Jctrl
-
-# Set the center frequencies, spans, delays, powers
-fcs = [4.5, 5.5, 6.5, 7.5]
-spans = [1000]*len(fcs)
-delays = [62]*len(fcs)
-powers = np.linspace(-30, -35, 2)
-
-# Change the sample name
-sample_name = 'NWTa2O5_30_02'
-
-measure_multiple_resonators(fcs, spans, delays, powers,
-        ifbw=100., sparam='S21', npts=65001,
-        adaptive_averaging=False, sample_name=sample_name,
-        runtime=0., cal_set = None)

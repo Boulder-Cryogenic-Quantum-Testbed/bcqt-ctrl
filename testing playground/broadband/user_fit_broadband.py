@@ -18,13 +18,15 @@ from scipy.interpolate import interp1d
 import scipy.special
 import re as regex
 import uncertainties
+pathToSelf = os.path.dirname(os.path.abspath(__file__))
 pathToParent = os.path.dirname(os.path.dirname(os.path.abspath(__file__))) 
 
 # XXX: You may need to add measurement/resfit to your path if it is not
 #      installed in a standard location.
 # Set a variable that equals the relative path of parent directory
 
-print(f"Loading user_fit from: {pathToParent}")
+print(f"Loading user_fit_broadband from: {pathToSelf}")
+print(f"                     parent dir: {pathToParent}")
 path_to_resfit = r'E:\Github\scresonators'
 pglob = glob.glob(path_to_resfit)
 assert len(pglob), f'Path: {path_to_resfit} does not exist, please specify path to scresonators'
@@ -53,14 +55,17 @@ def stitch_broadband(prefix, freq_band, freq_step, dstr, powers,
     print(f'center_freqs_strs: {center_freqs_strs}')
 
     # Generate directories and paths
-    sdirs = [f'{prefix}_{cf}GHz*'
-            for cf in center_freqs_strs]
-    print(f'sdirs:\n{sdirs}')
-    dirs = [glob.glob(f'{prefix}_{cf}GHz*')[0]
-            for cf in center_freqs_strs]
-    print(f'sdirs:\n{sdirs}')
-    fnames = [f'{d}/{prefix}_{cff}GHz_{p1:.0f}dB_{Tmxc:.0f}mK.csv'
-                for cff, d in zip(center_freqs_strs, dirs)]
+    sdirs = [f'{prefix}_{cf}GHz*' for cf in center_freqs_strs]
+    print(f'sdirs:  \n{sdirs}')
+    
+    data_dir = "240520_test_02"
+    data_files = glob.glob('{data_dir}\\*')
+    
+    dirs = [glob.glob(f'{data_dir}\\**') for cf in center_freqs_strs]
+    # dirs = [glob.glob(f'./broadband/{prefix}_{cf}GHz*')[0] for cf in center_freqs_strs]
+    print(f'dirs:  \n{dirs}')
+    
+    fnames = [f'{d}/{prefix}_{cff}GHz_{p1:.0f}dB_{Tmxc:.0f}mK.csv' for cff, d in zip(center_freqs_strs, dirs)]
 
     # Read the data and concatenate
     freqs  = np.array([])
@@ -450,10 +455,10 @@ def power_sweep_fit_drv(atten=[0, -60], sample_name=None,
     powers += sum(atten)
 
     def pdBm_to_navg_ticks(p):
-        n = power_to_navg(powers[0::2], Qi[0::2], Qc[0], fc[0])
-        labels = [r'$10^{%.2g}$' % x for x in np.log10(n)]
-        print(f'labels:\n{labels}')
-        return labels
+    	n = power_to_navg(powers[0::2], Qi[0::2], Qc[0], fc[0])
+    	labels = [r'$10^{%.2g}$' % x for x in np.log10(n)]
+    	print(f'labels:\n{labels}')
+    	return labels
 
     # Fit the TLS loss
     # tcmp = regex.compile('[0-9]+.[0-9]+')
@@ -644,10 +649,15 @@ def power_sweep_fit_drv(atten=[0, -60], sample_name=None,
 
     plt.close('all')
 
+
 if __name__ == '__main__':
+    print("Please refer to bcqt-ctrl -> modernization branch to run this fit")
+    print("if you INSIST, the original code has been commented out at the bottom of user_fit.py")    
+       
+    """
     # Set the input temperature
     temperature = 20e-3
-
+    
     # Set the input powers and temperature string
     powers_hi = np.linspace(-15, -35, 5)
     powers_lo =  np.linspace(-40, -95, 12)
@@ -693,3 +703,4 @@ if __name__ == '__main__':
     powers = [-30, -35]
     stitch_broadband(prefix, freq_band, freq_step, dstr, powers,
                     Tmxc=25., fscale=1e9, sparam='S12')
+"""
