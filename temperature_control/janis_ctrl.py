@@ -699,7 +699,7 @@ class JanisCtrl(object):
                             cal_set=cal_set,
                             setup_only=setup_only,
                             segments=segments,
-                            pna_addr=self.pna_addr
+                            pna_addr=self.pna_addr,
                             debug_mode = self.debug_mode,
                             output_folder = self.output_folder)
 
@@ -745,7 +745,7 @@ class JanisCtrl(object):
 
             # Read data and append to larger data set
             fname = f'{sampleid}_{freq:.3f}GHz_{power:.0f}dB_{temp:.0f}mK'
-            fname = filename.replace('.','p')
+            fname = fname.replace('.','p')
             data = np.genfromtxt(fname, delimiter=',').T
             fdata = np.hstack((fdata, data[0]))
             smag = np.hstack((smag, data[1]))
@@ -753,7 +753,7 @@ class JanisCtrl(object):
 
         f0 = frequency_band[0] / 1e9; f1 = frequency_band[1] / 1e9
         fname = f'{sampleid}_{f0:.3f}_{f1:.3f}GHz_{power:.0f}dB_{temp:.0f}mK.csv'
-        print(f'Writing all data to {fname_all} ...')
+        print(f'Writing all data to {fname} ...')
         with open(fname, 'w') as fid:
             fid.write('\n'.join([f'{ff}, {sm}, {sp}' 
                             for ff, sm, sp in zip(fdata, smag, sph)]))

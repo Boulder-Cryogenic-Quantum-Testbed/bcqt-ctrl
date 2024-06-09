@@ -228,10 +228,10 @@ def get_data(centerf: float,
         return
 
     # start taking data for S21
+    keysight.write('FORMat ASCII')
     keysight.write('INITiate:CONTinuous ON')
     keysight.write('OUTPut:STATe ON')
     # keysight.write('CALCulate1:PARameter:SELect \'M1\'')
-    keysight.write('FORMat ASCII')
 
     #wait until the averages are done being taken then read in the data
     count = 10
