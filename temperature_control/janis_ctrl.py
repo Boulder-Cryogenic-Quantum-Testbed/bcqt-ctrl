@@ -36,7 +36,9 @@ import numpy as np
 import errno
 
 import sys
-sys.path.append(r'C:\Users\68707\Documents\bcqt\bcqt-ctrl\pna_control')
+sys.path.append(r'C:\Users\Lehnert Lab\GitHub\bcqt-ctrl\temperature_control')
+sys.path.append(r'C:\Users\Lehnert Lab\GitHub\bcqt-ctrl\instrument_control')
+sys.path.append(r'C:\Users\Lehnert Lab\GitHub\bcqt-ctrl\pna_control')
 import pna_control as PNA
 import os
 
@@ -56,8 +58,10 @@ class JanisCtrl(object):
 
         # Set the default VNA address
         # self.vna_addr = 'TCPIP0::K-N5222B-21927::hislip0,4880::INSTR'
-        self.vna_addr = 'TCPIP0::68707CRYOCNTRL::hislip_PXI10_CHASSIS1_SLOT1_INDEX0,4880::INSTR'
-
+        # self.vna_addr = 'TCPIP0::68707CRYOCNTRL::hislip_PXI10_CHASSIS1_SLOT1_INDEX0,4880::INSTR'
+        # self.vna_addr = 'TCPIP0::169.254.89.124::hislip0::INSTR'
+        self.vna_addr = 'TCPIP0::169.254.89.124::inst0::INSTR'
+        
         # Set as True to start the PID controller, then set to False to allow
         # for updates to the PID values from the previous temperature set point
         self.is_pid_init = True
@@ -71,13 +75,15 @@ class JanisCtrl(object):
         self.adaptive_averaging = False
 
         # Set the base temperature of the fridge here
-        self.T_base = 0.016
+        self.T_base = 0.011
         self.dstr = datetime.datetime.today().strftime('%y%m%d')
 
         # Dictionary with the channels on the Lakeshore
         self.channel_dict = {'50K'     : 1, '10K'    : 2, '3K'  : 3,
                              'JT'      : 4, 'still'  : 5, 'ICP' : 6,
                              'MC JRS'  : 7, 'Cernox' : 8}
+        # For debugging
+        self.verbose = False
 
         # Update the arguments and the keyword arguments
         # This will overwrite the above defaults with the user-passed kwargs
@@ -111,7 +117,8 @@ class JanisCtrl(object):
             raise ValueError(f'Temperature sweep spacing {tsls} not supported.')
 
         # Print all of the members stored in the class
-        self.print_class_members()
+        if self.verbose:
+            self.print_class_members()
 
     def __del__(self):
         """
@@ -137,11 +144,10 @@ class JanisCtrl(object):
         """
         # Print all of the settings before proceeding
         print('\n---------------------------------------------------')
-        print(f'JanisCtrl class instance members:')
+        print(f'  JanisCtrl class instance members:')
         for k, v in self.__dict__.items():
-            print(f'{k} : {v}')
+            print(f'  {k} : {v}')
         print('---------------------------------------------------\n')
-
 
     def reset_socket(self):
         if self.socket is not None:
@@ -182,7 +188,7 @@ class JanisCtrl(object):
         temperature in K and timestamp
         """
         if self.bypass_janis:
-            return 0., 9e-3, 0.
+            return -1, -1, -1.
         self.tcp_send('readCMNTemp(9)')
         data = self.tcp_recv()
         err = False
@@ -218,8 +224,8 @@ class JanisCtrl(object):
             return None, None, None
 
         if channel_name == 'all':
+            temp_dict = {}
             for key, ch in self.channel_dict.items():
-
                 self.tcp_send(f'readTemp({ch})')
                 data = self.tcp_recv()
                 Z, T, tstamp, status = data.split(',')
@@ -228,6 +234,9 @@ class JanisCtrl(object):
                 Z = float(Z)
                 T = float(T)
                 print(f'{tstamp}, {key}: {T:.4g} K')
+                temp_dict[key] = (Z, T)
+            return temp_dict, tstamp
+        
         else:
             channel = self.channel_dict[channel_name]
             self.tcp_send(f'readTemp({channel})')
@@ -251,7 +260,7 @@ class JanisCtrl(object):
         the timestamp
         """
         if self.bypass_janis:
-            return 0., 0., 0.
+            return -1, -1, -1
         self.tcp_send('readFlow(1)')
         data = self.tcp_recv()
         flow_V, flow_umol_s1, tstamp, status = data.split(',')
@@ -271,7 +280,7 @@ class JanisCtrl(object):
         Reads the temperature of one of the channels from the Lakeshore
         """
         if self.bypass_janis:
-            return 0., 0., 0.
+            return -1, -1, -1
         all_channels = [1, 2, 3, 4]
         if channel == 'all':
             for ch in all_channels:
@@ -608,55 +617,68 @@ class JanisCtrl(object):
         return total_time_hr
 
 
-    def pna_process(self, idx, Tset, out, prefix='M3D6_02_WITH_1SP_INP',
+    def pna_process(self, idx, Tset, out, prefix=None,
                     adaptive_averaging=True, cal_set=None, setup_only=False,
-                    close_socket_start=True, segments=None):
+                    close_socket_start=True, segments=None, seg_str=None):
         """
         Performs a PNA measurement
         """
         if close_socket_start:
             self.close_socket()
-
+            
         # Get the temperature from the temperature controller
-        temp = Tset * 1e3 #mk
+        temp_mK = Tset * 1e3 # K
         # sampleid = f'{prefix}_{self.dstr}' 
         # sample_name = f'{prefix}_{int(self.vna_startpower)}_{int(self.vna_endpower)}dBm'
 
         # Preparing to measure frequencies, powers
         if self.vna_numsweeps > 1:
-            powers = np.linspace(self.vna_startpower, self.vna_endpower,
-                                 self.vna_numsweeps)
+            powers = [int(x) for x in np.linspace(self.vna_startpower, self.vna_endpower,
+                                 self.vna_numsweeps)]
             print(f'Measuring at {self.vna_centerf} GHz')
             print(f'IFBW: {self.vna_ifband} kHz')
             print(f'Span: {self.vna_span} MHz')
             print(f'Npoints: {self.vna_points}')
             print(f'Nsweeps: {self.vna_numsweeps}')
             print(f'Powers: {powers} dBm')
+            print(f"data directory:  {self.data_dir}")
 
             # Note: PNA power sweep assumes the outputfile has .csv as its last
             # four characters and removes them when manipulating strings and
             # directories
             # outputfile = sampleid+'_'+str(self.vna_centerf)+'GHz'
             PNA.power_sweep(self.vna_startpower, self.vna_endpower,
-                    self.vna_numsweeps, self.vna_centerf, self.vna_span, temp,
-                    self.vna_averages, self.vna_edelay, self.vna_ifband,
-                    self.vna_points, prefix, sparam=self.sparam, 
-                    adaptive_averaging=adaptive_averaging,
-                    cal_set=cal_set,
-                    setup_only=setup_only,
-                    segments=segments,
-                    instr_addr=self.vna_addr)
+                            self.vna_numsweeps, self.vna_centerf, 
+                            self.vna_span, temp_mK,
+                            self.vna_averages, self.vna_edelay, 
+                            self.vna_ifband, self.vna_points, 
+                            prefix, 
+                            sparam=self.sparam, 
+                            adaptive_averaging=adaptive_averaging,
+                            cal_set=cal_set,
+                            setup_only=setup_only,
+                            segments=segments,
+                            seg_str=seg_str,
+                            instr_addr=self.vna_addr,
+                            output_file = self.output_file,
+                            data_dir = self.data_dir)
 
         else:
             PNA.power_sweep(self.vna_startpower, self.vna_endpower,
-                    self.vna_numsweeps, self.vna_centerf, self.vna_span, temp,
-                    self.vna_averages, self.vna_edelay, self.vna_ifband,
-                    self.vna_points, prefix, sparam=self.sparam, 
-                    adaptive_averaging=adaptive_averaging,
-                    cal_set=cal_set,
-                    setup_only=setup_only,
-                    segments=segments,
-                    instr_addr=self.vna_addr)
+                            self.vna_numsweeps, self.vna_centerf, 
+                            self.vna_span, temp_mK,
+                            self.vna_averages, self.vna_edelay, 
+                            self.vna_ifband, self.vna_points, 
+                            prefix, 
+                            sparam=self.sparam, 
+                            adaptive_averaging=adaptive_averaging,
+                            cal_set=cal_set,
+                            setup_only=setup_only,
+                            segments=segments,
+                            seg_str=seg_str,
+                            instr_addr=self.vna_addr,
+                            output_file = self.output_file,
+                            data_dir = self.data_dir)
 
         out[idx] = 0
 
@@ -668,7 +690,7 @@ class JanisCtrl(object):
         """
         # Read the CMN temperature
         Z, temp, timestamp = self.read_cmn()
-
+        
         # Determine the number of chunks to measure
         df = frequency_band[1] - frequency_band[0]
         Nchunks = int(np.floor(df / frequency_chunk_size))
@@ -770,7 +792,7 @@ class JanisCtrl(object):
                         # Start the PNA measurement
                         if measure_vna:
                             print('Starting PNA measurement ...')
-                            self.pna_process('meas', Tset, out, prefix=prefix)
+                            self.pna_process('meas', Tset, out, prefix=prefix, seg_str=self.seg_str)
 
                         # Update the time stamp, elapsed time, temperature
                         print(f'out:\n{out}')
@@ -813,7 +835,7 @@ class JanisCtrl(object):
     def pna_sweep_multiple_resonators(self, freqs : list, ifbws : list,
             delays : list, spans : list, start_powers : list, 
             end_powers : list, num_powers : list, sample_name : str, avgs :
-            list, pts : int=2001, sparam : str='S12'):
+            list, pts : int=2001, sparam : str='S21'):
         """
         Sweeps the VNA through multiple resonators a fixed or multiple powers
         """
@@ -834,7 +856,7 @@ class JanisCtrl(object):
             print(f'Running {sparam} measurement of {f:.2f} GHz resonator ...')
             Z, T, tstamp = self.read_cmn()
             out = {}
-            self.pna_process('meas', T, out, prefix=sample_name)
+            self.pna_process('meas', T, out, prefix=sample_name, seg_str=self.seg_str)
 
         print(f'PNA multiple resonator measurements complete.')
 
@@ -909,9 +931,9 @@ def multiple_resonator_driver(Jctrl : JanisCtrl):
     # Call the class function
     Jctrl.pna_sweep_multiple_resonators(freqs, ifbws, delays, spans,
             start_powers, end_powers, num_powers, sample_name,
-            avgs, pts=1001, sparam='S12')
+            avgs, pts=1001, sparam='S21')
 
-def compute_segments(fc, span, p, pc, beta, fscale, Noffres, offresfraction,
+def compute_segments(fc, span, p, pc, beta, fscale, Noffres, offresfraction, Nf=None,
         option='hybrid'):
     """
     Computes segments needed to perform homophasal measurements
@@ -927,16 +949,18 @@ def compute_segments(fc, span, p, pc, beta, fscale, Noffres, offresfraction,
     fstop  = fc + span / 2
     fa = fstart + offresfraction * span / 2
     fb = fstop  - offresfraction * span / 2
+    
     if option == 'homophasal':
         theta0 = np.pi / 32
-        Nf = 30
+        if Nf is None:  Nf = 30
         theta = np.linspace(-np.pi + theta0, (np.pi - theta0), Nf + 2)
         freq = fc * (1 - 0.5 * np.tan(theta / 2) / Q)
         segments = [f',1,2,{ff1*fscale},{ff2*fscale}'
                 for ff1, ff2 in zip(freq[0::2], freq[1::2])]
+        
     elif option == 'hybrid':
         theta0 = np.pi / 32
-        Nf = 20
+        if Nf is None:  Nf = 20
         theta = np.linspace(-np.pi + theta0, (np.pi - theta0), Nf + 2)
         freq = fc * (1 - 0.5 * np.tan(theta / 2) / Q)
 
@@ -952,18 +976,20 @@ def compute_segments(fc, span, p, pc, beta, fscale, Noffres, offresfraction,
                     *hsegments,
                     f',1,{Noffres},{fap},{fstart*fscale}']
     else:
-        segments = [f',1,5,{fstart*fscale},{fa*fscale}',
-                    f',1,41,{fa*fscale},{fb*fscale}',
-                    f',1,5,{fb*fscale},{fstop*fscale}']
+        segments = [f', 1 , 5  , {fstart*fscale} , {fa*fscale}',
+                    f', 1 , 41 , {fa*fscale}     , {fb*fscale}',
+                    f', 1 , 5  , {fb*fscale}     , {fstop*fscale}']
 
     return segments
 
 def measure_multiple_resonators(fcs, spans, delays, powers,
-        ifbw=1., sparam='S21', npts=1001,
-        adaptive_averaging=True, sample_name='',
-        runtime=1., cal_set=None, start_delay=0.,
-        offresfraction=0.45, is_segmented=True, use_homophasal=None,
-        Navg_init=None, Noffres=5, pc=-75., beta=0.2):
+                                ifbw=1., sparam='S21', npts=1001,
+                                adaptive_averaging=True, sample_name='',
+                                runtime=1., cal_set=None, start_delay=0.,
+                                offresfraction=0.45, is_segmented=True, seg_str=None,
+                                segment_option=None, Navg_init=None, Noffres=5, Nf=None,
+                                pc=-75., beta=0.2, bypass_janis=False, file_names=None, data_dirs=None,
+                                Jctrl_dict=None):
     """
     Measures multiple resonators sequentially
     """
@@ -983,16 +1009,36 @@ def measure_multiple_resonators(fcs, spans, delays, powers,
 
     # Delay the start of a sweep by Nstart hours
     h2s = 3600.
+    
+    if data_dirs is None:
+        data_dirs = [".\\"] * len(powers)
 
-    for fc, span, delay in zip(fcs, spans, delays):
-
+    for fc, span, delay, fname, data_dir in zip(fcs, spans, delays, file_names, data_dirs):
+        # ensure all are the same size so zip() works as expected
+        prev_length = len(fcs)
+        for length in [len(spans), len(delays), len(data_dirs)]:
+            if length != prev_length:
+                print(f"""\n\nWarning, variables 'spans' ({len(spans)}),  
+                                'delays'({len(delays)}), 
+                            and 'data_dirs' ({len(data_dirs)}) are not of equal length.\n\n""")
+            prev_length = length
+        
         # Create the JanisCtrl 
-        print(f'Measuring {sample_name} at {fc} GHz ...')
+        print(f'\nStarting measurement of {sample_name} at {fc} GHz ...')
         Jctrl = JanisCtrl(Tstart, Tstop, dT,
                 sample_time=sample_time, T_eps=T_eps,
-                therm_time=therm_time,
-                init_socket=True, bypass_janis=True,
-                adaptive_averaging=adaptive_averaging)
+                therm_time=therm_time, Nf=Nf,
+                init_socket=True, bypass_janis=bypass_janis,
+                adaptive_averaging=adaptive_averaging, output_file=fname,
+                data_dir=data_dir)
+        
+        if Jctrl_dict is not None:
+            try:
+                for key, val in Jctrl_dict.items():
+                    setattr(Jctrl, key, val)
+            except Exception as e:
+                print("Exception occurred: make sure 'Jctrl_dict' is a dict")
+                print(e)
 
         """
         Change these settings for each power sweep
@@ -1006,6 +1052,8 @@ def measure_multiple_resonators(fcs, spans, delays, powers,
         Jctrl.vna_startpower = p1 # dBm
         Jctrl.vna_endpower   = p2 # dBm
         Jctrl.vna_numsweeps  = power_steps 
+        
+        bypass_janis = Jctrl.bypass_janis
 
         """
         Initial number of averages
@@ -1052,7 +1100,8 @@ def measure_multiple_resonators(fcs, spans, delays, powers,
             # segments = compute_homophasal_segments()
             p = p1
             segments = compute_segments(fc, span, p, pc, beta, 
-                    fscale, Noffres, offresfraction, option=use_homophasal)
+                    fscale, Noffres, offresfraction, Nf=Nf, option=segment_option)
+            
             # Q = 10 * (fc / span)
             # if use_homophasal == 'homophasal':
             #     theta0 = np.pi / 32
@@ -1086,18 +1135,22 @@ def measure_multiple_resonators(fcs, spans, delays, powers,
         else:
             segments = None
 
-        # Read the MXC temperature from the CMN
-        Z, T, tstamp = Jctrl.read_cmn()
-        print(f'{tstamp}, {Z} ohms, MXC CMN: {T*1e3:.2f} mK')
-        
-        # Read the flow rate
-        flow_V, flow_umol_s1, tstamp = Jctrl.read_flow_meter()
-        print(f'{tstamp}, {flow_V} V, {flow_umol_s1:.2f} umol / s')
-        
-        # Read and report all temperatures a pressures
-        Jctrl.read_temp('all')
-        Jctrl.read_pressure('all')
-        
+        if bypass_janis is not True:
+            # Read the MXC temperature from the CMN
+            Z, T, tstamp = Jctrl.read_cmn()
+            print(f'{tstamp}, {Z} ohms, MXC CMN: {T*1e3:.2f} mK')
+            
+            # Read the flow rate
+            flow_V, flow_umol_s1, tstamp = Jctrl.read_flow_meter()
+            print(f'{tstamp}, {flow_V} V, {flow_umol_s1:.2f} umol / s')
+            
+            # Read and report all temperatures and pressures
+            Jctrl.read_temp('all')
+            Jctrl.read_pressure('all')
+        else:
+            Z, T, tstamp = [-1]*3
+            flow_V, flow_umol_s1, tstamp = [-1]*3
+                    
         # Enter a sample name and perform the PNA power sweep
         ## Note: adaptive_averaging will increase the averages
         ##       by a factor 10^(dp / 10), where dp is the power
@@ -1109,72 +1162,73 @@ def measure_multiple_resonators(fcs, spans, delays, powers,
         out = {}
         Jctrl.pna_process('meas', T, out, prefix=sample_name,
                           adaptive_averaging=adaptive_averaging,
-                          cal_set=cal_set, setup_only=False, segments=segments)
+                          cal_set=cal_set, setup_only=False, 
+                          segments=segments, seg_str=seg_str)
 
         del Jctrl
 
 
-if __name__ == '__main__':
-    # Iterate over a list of temperatures
-    # 30 mK -- 300 mK, 10 mK steps
-    Tstart = 0.03; Tstop = 0.315; dT = 0.015
-    # Tstart = 0.255; Tstop = 0.315; dT = 0.015
-    # Tstart = 0.150; Tstop = 0.350; dT = 0.1
-    # sample_time = 15; T_eps = 0.001 -- up to 240 mK
-    sample_time = 15; T_eps = 0.0025 # -- 255 mK and up
-    # therm_time  = 5. * 60. # wait an extra 5 minutes to thermalize
-    therm_time  = 300. # wait an extra 5 minutes to thermalize
+# if __name__ == '__main__':
+#     # Iterate over a list of temperatures
+#     # 30 mK -- 300 mK, 10 mK steps
+#     Tstart = 0.03; Tstop = 0.315; dT = 0.015
+#     # Tstart = 0.255; Tstop = 0.315; dT = 0.015
+#     # Tstart = 0.150; Tstop = 0.350; dT = 0.1
+#     # sample_time = 15; T_eps = 0.001 -- up to 240 mK
+#     sample_time = 15; T_eps = 0.0025 # -- 255 mK and up
+#     # therm_time  = 5. * 60. # wait an extra 5 minutes to thermalize
+#     therm_time  = 300. # wait an extra 5 minutes to thermalize
 
-    # Setup the temperature controller class object
-    Jctrl = JanisCtrl(Tstart, Tstop, dT,
-            sample_time=sample_time, T_eps=T_eps,
-            therm_time=therm_time,
-            # init_socket=True, bypass_janis=True)
-            init_socket=True, bypass_janis=False)
+#     # Setup the temperature controller class object
+#     Jctrl = JanisCtrl(Tstart, Tstop, dT,
+#             sample_time=sample_time, T_eps=T_eps,
+#             therm_time=therm_time,
+#             # init_socket=True, bypass_janis=True)
+#             init_socket=True, bypass_janis=False)
 
-    # Mines 3D #3, bare
-    Jctrl.vna_centerf = 8.0214305
-    Jctrl.vna_span = 0.5 # MHz
-    # Jctrl.vna_edelay = 0.969 #ns
-    Jctrl.vna_edelay = 1.039 #ns
+#     # Mines 3D #3, bare
+#     Jctrl.vna_centerf = 8.0214305
+#     Jctrl.vna_span = 0.5 # MHz
+#     # Jctrl.vna_edelay = 0.969 #ns
+#     Jctrl.vna_edelay = 1.039 #ns
 
-    Jctrl.vna_points = 1001
+#     Jctrl.vna_points = 1001
 
-    # Temperature sweep settings
-    Jctrl.sparam = 'S12'
-    cal_set = 'CryoCal_2SP_INP_8p02G_20220712'
+#     # Temperature sweep settings
+#     Jctrl.sparam = 'S21'
+#     cal_set = 'CryoCal_2SP_INP_8p02G_20220712'
 
-    # First sweep, int power
-    Jctrl.vna_averages = 5000
-    Jctrl.vna_ifband = 0.1 #khz
-    Jctrl.vna_numsweeps = 3
-    # Jctrl.vna_startpower = -70
-    # Jctrl.vna_endpower = -85
-    Jctrl.vna_startpower = -85
-    Jctrl.vna_endpower = -95
+#     # First sweep, int power
+#     Jctrl.vna_averages = 5000
+#     Jctrl.vna_ifband = 0.1 #khz
+#     Jctrl.vna_numsweeps = 3
+#     # Jctrl.vna_startpower = -70
+#     # Jctrl.vna_endpower = -85
+#     Jctrl.vna_startpower = -85
+#     Jctrl.vna_endpower = -95
 
-    Jctrl.print_class_members()
+#     Jctrl.print_class_members()
 
-    # Run the temperature sweep from within the class
-    Jctrl.set_current(0.)
-    Z, T, tstamp = Jctrl.read_cmn()
-    print(f'{tstamp}, {Z} ohms, {T*1e3} mK')
-    flow_V, flow_umol_s1, tstamp = Jctrl.read_flow_meter()
-    print(f'{tstamp}, {flow_V} V, {flow_umol_s1} umol / s')
-    Jctrl.read_temp('all')
-    Jctrl.read_pressure('all')
+#     # Run the temperature sweep from within the class
+#     Jctrl.set_current(0.)
+#     Z, T, tstamp = Jctrl.read_cmn()
+#     print(f'{tstamp}, {Z} ohms, {T*1e3} mK')
+#     flow_V, flow_umol_s1, tstamp = Jctrl.read_flow_meter()
+#     print(f'{tstamp}, {flow_V} V, {flow_umol_s1} umol / s')
+#     Jctrl.read_temp('all')
+#     Jctrl.read_pressure('all')
 
-    # Mines 3D cavity 9.2 GHz with, without InP
-    # sample_name = 'M3D6_02_WITH_2SP_INP'
-    # out = {}
-    # Jctrl.pna_process('meas', T, out, prefix=sample_name,
-    #                 adaptive_averaging=True,
-    #                 cal_set=cal_set)
-    # Jctrl.set_still_heater(0.4)
+#     # Mines 3D cavity 9.2 GHz with, without InP
+#     # sample_name = 'M3D6_02_WITH_2SP_INP'
+#     # out = {}
+#     # Jctrl.pna_process('meas', T, out, prefix=sample_name,
+#     #                 adaptive_averaging=True,
+#     #                 cal_set=cal_set)
+#     # Jctrl.set_still_heater(0.4)
 
-    # NYU 2D resonator, Al on InP
-    # sample_name = 'NYU2D_AL_INP'
-    # Jctrl.run_temp_sweep(measure_vna=True, prefix=sample_name)
-    Jctrl.set_current(0.)
-    Z, T, tstamp = Jctrl.read_cmn()
-    # print(f'{tstamp}, {Z} ohms, {T*1e3} mK')
+#     # NYU 2D resonator, Al on InP
+#     # sample_name = 'NYU2D_AL_INP'
+#     # Jctrl.run_temp_sweep(measure_vna=True, prefix=sample_name)
+#     Jctrl.set_current(0.)
+#     Z, T, tstamp = Jctrl.read_cmn()
+#     # print(f'{tstamp}, {Z} ohms, {T*1e3} mK')
