@@ -32,7 +32,7 @@ vna_addr='TCPIP0::192.168.137.178::hislip0::INSTR'
 
 anritsu = AnritsuCtrl(anritsu_addr, vna_addr)
 sweep_freqs = np.linspace(6.3, 7.3, 101)
-sweep_powers = np.linspace(-25., -75., 3)
+sweep_powers = np.linspace(-10, -25, 10)
 vna_dict = {'sample_id' : 'TWPA',
             'centerf' : 6,
             'span' : 4000,
