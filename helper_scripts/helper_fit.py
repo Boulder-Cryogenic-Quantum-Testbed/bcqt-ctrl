@@ -69,7 +69,7 @@ def fit_single_res(filename, filter_points=[0,0], preprocess_method='linear',
     myres.normalize = normalize
     myres.save_dcm_plot = save_dcm_plot
     myres.plot = 'png'
-    myres.fit_dir = data_dir + '\\scres_fits\\'
+    myres.fit_dir = os.path.dirname(data_dir) + '\\all_resonator_fit_plots\\'
     
     # Setup the method for fitting
     try: 
@@ -620,11 +620,11 @@ def power_sweep_fit_drv(atten=[0, -60], sample_name=None,
     if data_dir is None:
         fprefix = sample_name + '_' if sample_name else ''  # saved in script directory
     else:
-        fprefix = data_dir + "fits\\"
-        hm.check_and_make_dir(fprefix)  # saved in data_dir under "fits"
+        fprefix = data_dir + "all_fit_plots\\"
+        hm.check_and_make_dir(fprefix)  # save a copy in data_dir under "<sample_name_freq>\\fits"
         
         fprefix_2 = f"reports\\{sample_name}_{fc_str}GHz\\"
-        hm.check_and_make_dir(fprefix_2)  # a copy saved in main directory under "reports"
+        hm.check_and_make_dir(fprefix_2)  # save a copy in main directory under "fit_reports\\<sample_name_freq>\\"
     
     
     fig_fc_title = 'fc_vs_power'+fsuffix

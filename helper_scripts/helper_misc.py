@@ -18,11 +18,13 @@ import numpy as np
 def check_and_make_dir(directory_name):
     directory_name = directory_name.replace('.csv', '').replace('.pdf', '')  # sanitize input
     if not os.path.exists(directory_name):
-        print(f'      plot directory: {directory_name}')
-        print(f'      Does not exist. Making new directory.')
+        print(f'      target directory: {directory_name}')
+        print(f'      directory does not exist. now creating...')
         os.makedirs(directory_name)
+    else:
+        print(f"      directory already exists.")
+    print(f'      absolute path: {os.path.abspath(directory_name)}\n')
     return
-     
      
 
 def get_power_from_filename(filename):
@@ -164,36 +166,41 @@ def average_files(filenames):
 
 
 
-def read_temp_JCtrl(jctrl_path=None):
+def read_temp_JCtrl(jctrl_path=None, print_output=False):
+        
     if jctrl_path is None:
-        jctrl_path = r'C:\Users\Lehnert Lab\GitHub\bcqt-ctrl\temperature_control'
-    
+        # jctrl_path = r'C:\Users\Lehnert Lab\GitHub\bcqt-ctrl\temperature_control'
+        jctrl_path = r'E:\GitHub\bcqt-ctrl\temperature_control'
+        # jctrl_path = r'..\temperature_control'
+        
     sys.path.append(jctrl_path)
     from janis_ctrl import JanisCtrl
     
-    # random values 
-    Tstart = 0.03; Tstop = 0.315; dT = 0.015
-    sample_time = 15; T_eps = 0.0025 # -- 255 mK and up
-    therm_time  = 300. # wait an extra 5 minutes to thermalize
+    # random values to initialize jctrl that aren't actually used
+    Tstart, Tstop, dT, sample_time, T_eps, therm_time = 0.03, 0.315, 0.015, 15, 0.0025, 300
 
-    JCtrl = JanisCtrl(Tstart, Tstop, dT,
-            sample_time=sample_time, T_eps=T_eps,
-            therm_time=therm_time, Nf=32,
-            init_socket=True, bypass_janis=False,
-            adaptive_averaging=False, output_file=None,
-            data_dir=None)
-    
     try:
+        JCtrl = JanisCtrl(Tstart, Tstop, dT,
+                sample_time=sample_time, T_eps=T_eps,
+                therm_time=therm_time, Nf=32,
+                init_socket=True, bypass_janis=False,
+                adaptive_averaging=False, output_file=None,
+                data_dir=None)
         output_cmn = JCtrl.read_cmn()
-        output_temp, tstamp = JCtrl.read_temp('all')
-        
+        output_ls, tstamp = JCtrl.read_temp('all', False)
     except Exception as e:
         print("Failed to read_temp, error:  ", e)
-        return None
-    
+        return [None], [None], [None]
     finally:
         del JCtrl
+        
+    if print_output is True:
+        print("\nLakeshore:")
+        for k,v in output_ls.items():
+            print(f"  {k} = {v[1]:1.3f} K")
+            
+        print(f"\nCMN Temp = {output_cmn[1]*1e3:1.2f} mK")
     
-    return output_cmn, output_temp, tstamp
+    return output_cmn, output_ls, tstamp
 
 

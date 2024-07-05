@@ -36,10 +36,11 @@ import numpy as np
 import errno
 
 import sys
-sys.path.append(r'C:\Users\Lehnert Lab\GitHub\bcqt-ctrl\temperature_control')
-sys.path.append(r'C:\Users\Lehnert Lab\GitHub\bcqt-ctrl\instrument_control')
-sys.path.append(r'C:\Users\Lehnert Lab\GitHub\bcqt-ctrl\pna_control')
-import pna_control as PNA
+# sys.path.append(r'E:\GitHub\bcqt-ctrl')
+# sys.path.append(r'E:\GitHub\bcqt-ctrl\temperature_control')
+# sys.path.append(r'E:\GitHub\bcqt-ctrl\instrument_control')
+sys.path.append(r'E:\GitHub\bcqt-ctrl\pna_control')
+import pna_control.pna_control as PNA
 import os
 
 
@@ -53,14 +54,17 @@ class JanisCtrl(object):
         """
         # Set the defaults for the TCP address and ports
         self.TCP_IP = 'localhost'
+        # self.TCP_IP = '192.168.0.101'
         self.TCP_PORT = 5559
         self.init_socket = True
-
+        
+        print(f"Using TCP_IP : {self.TCP_IP}\nand TCP_PORT : {self.TCP_PORT}")
+        
         # Set the default VNA address
         # self.vna_addr = 'TCPIP0::K-N5222B-21927::hislip0,4880::INSTR'
         # self.vna_addr = 'TCPIP0::68707CRYOCNTRL::hislip_PXI10_CHASSIS1_SLOT1_INDEX0,4880::INSTR'
-        # self.vna_addr = 'TCPIP0::169.254.89.124::hislip0::INSTR'
-        self.vna_addr = 'TCPIP0::169.254.89.124::inst0::INSTR'
+        # self.vna_addr = 'TCPIP0::169.254.89.124::inst0::INSTR'
+        self.vna_addr = 'TCPIP0::192.168.0.113::inst0::INSTR'
         
         # Set as True to start the PID controller, then set to False to allow
         # for updates to the PID values from the previous temperature set point
@@ -216,7 +220,7 @@ class JanisCtrl(object):
             print(f'tcp_send(readCMNTemp(9)) failed with status: {status}')
             return None, None, None
 
-    def read_temp(self, channel_name='still'):
+    def read_temp(self, channel_name='still', print_output=True):
         """
         Reads the temperature of one of the channels from the Lakeshore
         """
@@ -233,7 +237,8 @@ class JanisCtrl(object):
                 tstamp = tstamp[0].split('.')[0]
                 Z = float(Z)
                 T = float(T)
-                print(f'{tstamp}, {key}: {T:.4g} K')
+                if print_output is True:
+                    print(f'{tstamp}, {key}: {T:.4g} K')
                 temp_dict[key] = (Z, T)
             return temp_dict, tstamp
         

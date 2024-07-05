@@ -27,11 +27,14 @@ def plot_S21_data(freq, plot_config_dict, debug=False, **kwargs):
     keys = kwargs.keys()
     if debug: 
         print("    ~~ printing all method kwargs")
-        for key, value in kwargs.items():
-            if len(value) < 10:
-                print(key, value)
-            else:
-                print(key, type(value))
+        # for key, value in kwargs.items():
+        #     if type(value) is not bool:
+        #         if len(value) < 10:
+        #             print(key, value)
+        #         else:
+        #             print(key, type(value))
+        #     else:
+        #         print(key, value)
 
     ############ check method kwargs for data loading
     if "real" in keys: # real & imag -> cmpl
@@ -47,28 +50,47 @@ def plot_S21_data(freq, plot_config_dict, debug=False, **kwargs):
         real = np.real(cmpl)
         imag = np.imag(cmpl)
         del kwargs["complex"]
-    if "magn" in keys: # cmpl -> real & imag
-        if debug: print("    ~~ Received magn and phase dataset")
-        magn = kwargs["magn"]
+    if "magn_lin" in keys: # cmpl -> real & imag
+        if debug: print("    ~~ Received magn_lin and phase dataset")
+        magn_lin = kwargs["magn_lin"]
+        magn_dBm = np.log10(magn_lin)*20
         phase = kwargs["phase"]
         # check if phase is in degrees
         if any(phase > 2.1*np.pi) or any(phase < -2.1*np.pi):
             if debug: print("hf.quick_plot_data:  Converting input phase from degrees to radians.")
             phase_deg = kwargs["phase"]
             phase = np.rad2deg(phase_deg)
-        cmpl = magn * np.exp(1j * phase)
+        cmpl = magn_lin * np.exp(1j * phase)
         real = np.real(cmpl)
         imag = np.imag(cmpl)
+    if "magn_dBm" in keys: # cmpl -> real & imag
+            if debug: print("    ~~ Received magn_dBm and phase dataset")
+            magn_dBm = kwargs["magn_dBm"]
+            magn_lin = 10**(magn_dBm/20)
+            phase = kwargs["phase"]
+            
+            # check if phase is in degrees
+            if any(phase > 2.1*np.pi) or any(phase < -2.1*np.pi):
+                if debug: print("hf.quick_plot_data:  Converting input phase from degrees to radians.")
+                phase_deg = kwargs["phase"]
+                phase = np.rad2deg(phase_deg)
+            cmpl = magn_lin * np.exp(1j * phase)
+            real = np.real(cmpl)
+            imag = np.imag(cmpl)
+
 
     ############ check plot config dictionary
     config_keys = plot_config_dict.keys()
     if debug: 
         print("    ~~ printing all plot_config_dict items ")
-        for key, value in plot_config_dict.items():
-            if len(value) < 10:
-                print(key, value)
-            else:
-                print(key, type(value))
+        # for key, value in plot_config_dict.items():
+        #     if type(value) is not bool:
+        #         if len(value) < 10:
+        #             print(key, value)
+        #         else:
+        #             print(key, type(value))
+        #     else:
+        #         print(key, value)
                 
     if "plot_title" in config_keys:
         fig_title = plot_config_dict["plot_title"]     
@@ -93,7 +115,7 @@ def plot_S21_data(freq, plot_config_dict, debug=False, **kwargs):
     else:
         markersize = 4
         
-    magn = -np.abs(cmpl)
+    magn_lin = np.abs(cmpl)
     phase = np.unwrap(np.angle(cmpl))
 
     fig, axes_dict = plt.subplot_mosaic(mosaic, figsize=(10,6), tight_layout=True)
@@ -101,7 +123,7 @@ def plot_S21_data(freq, plot_config_dict, debug=False, **kwargs):
     axes = list(axes_dict.values())
     tick_label_size = 12
     
-    ax1.plot(freq, magn, 'ko', markersize=markersize)
+    ax1.plot(freq, magn_lin, 'ko', markersize=markersize)
     ax1.set_xlabel("Frequency [GHz]", size=14)
     ax1.set_ylabel("S21 [a.u.]", size=14)
     ax1.set_title("Magnitude Data", size=16)
@@ -132,9 +154,12 @@ def plot_S21_data(freq, plot_config_dict, debug=False, **kwargs):
             ax3.axhline(0, linestyle=':', color='k')  
             ax3.axvline(0, linestyle=':', color='k')
     
-    if "plot_filename" in config_keys:
-        if plot_config_dict["plot_filename"] is not None:
-            fig.savefig(plot_config_dict["plot_filename"], format='png')
+    if "plot_filename" in config_keys and plot_config_dict["plot_filename"] is not None:
+        plot_filename = plot_config_dict["plot_filename"]
+        plot_filepath = plot_config_dict["plot_filepath"]
+        if plot_filepath is not None and plot_filename is not None:
+            print(f"    Saving plot for {plot_filename} in {plot_filepath}")
+            fig.savefig(plot_filepath + "\\" + plot_filename, format='png')
             
         
     return fig, axes

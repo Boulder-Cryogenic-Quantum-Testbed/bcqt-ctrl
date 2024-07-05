@@ -14,8 +14,8 @@ print("Make sure you login to the JetWay session on PuTTY with user: 'bco' and p
 print("Running __init__.py for helper_scripts!'")
 
 # %% 
-path_to_bcqt_ctrl = 'C:\\Users\\Lehnert Lab\\GitHub\\bcqt-ctrl\\'
-path_to_resfit = 'C:\\Users\\Lehnert Lab\\Github\\scresonators\\'
+path_to_bcqt_ctrl = r'E:\GitHub\bcqt-ctrl'
+path_to_resfit = r'E:\Github\scresonators'
 path_to_parent = os.path.dirname(os.path.abspath(__file__))
 path_to_parent_parent = os.path.dirname(path_to_parent)
 
