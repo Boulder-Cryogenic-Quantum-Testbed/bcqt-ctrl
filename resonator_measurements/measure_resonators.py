@@ -1,8 +1,19 @@
  
+"""
+    measure_resonators.py 
+    
+    Author: Jorge Ramirez
+        based on "user_ctrl_segmented_homophasal.py" used in
+        prior cooldowns to routinely measure resonators
+        
+"""
+ 
 # %%
 
 %load_ext autoreload
 %autoreload 2
+
+%run ../setup_measurement
 
 import sys, time, os, glob
 import numpy as np
@@ -14,9 +25,9 @@ import helper_load as hl
 import helper_misc as hm
 import helper_fit as hf
 
-import plot_settings
-
-%run ../setup_measurement
+# may need to open this file, save it and
+# then close it for settings to apply
+import plot_settings  
 
 # %%
 
@@ -29,7 +40,6 @@ line_num, sample_name = re.split(r"_", base_dir, maxsplit=1)  # use regex to spl
 print(f"{line_num}_{sample_name}")
 
 # %% to try and get rid of stupid style sheet issue
-import plot_settings
 plt.subplots(1,1)
 plt.plot()
 plt.show()
