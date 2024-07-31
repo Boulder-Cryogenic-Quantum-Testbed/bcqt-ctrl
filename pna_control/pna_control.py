@@ -14,7 +14,8 @@ import pyvisa
 import os
 from os import path
 
-import time
+import time 
+from datetime import datetime
 import pandas as pd
 
 def pna_setup(pna, points: int, centerf: float, span: float, ifband_khz: float, power: float,
@@ -41,7 +42,7 @@ def pna_setup(pna, points: int, centerf: float, span: float, ifband_khz: float, 
 
     '''
     # Send a preset command to the VNA and turn off the RF power
-    print("  Reinitializing PNA")
+    print("Initializing PNA..")
     # XXX: Changed to user preset
     # pna.write('SYSTem:FPRESet')
     pna.write('SYSTem:UPRESet')
@@ -124,8 +125,13 @@ def pna_setup(pna, points: int, centerf: float, span: float, ifband_khz: float, 
     averages = averages//1
     pna.write('SENSe1:AVERage:Count {}'.format(averages))
 
-def read_data(pna, points, sample_id, power, temp, centerf, segments : list = None,
-        overwrite : bool = True, output_file = None,  data_dir = '.\\', seg_str = None):
+def read_data(pna, points, sample_id, power, temp, centerf, 
+                segments : list = None,
+                overwrite : bool = True, 
+                output_filename = None, 
+                output_filepath = None, 
+                filename_suffix = None,
+                verbose : bool = False):
     '''
     function to read in data from the pna and output it into a file
     '''
@@ -138,8 +144,10 @@ def read_data(pna, points, sample_id, power, temp, centerf, segments : list = No
         # Read the list of all segments
         freq = np.array([])
         for s in segments:
-            ssplit = s.split(',')
-            nf = int(ssplit[2])
+            ssplit = s.replace(" ", "").split(',')
+            
+            # int() doesnt want a string of a float, so if it has a decimal, turn to float first
+            nf = int(ssplit[2]) if '.' not in ssplit[2] else int(float(ssplit[2]))  
             f1 = float(ssplit[3])
             f2 = float(ssplit[4])
             f = np.linspace(f1, f2, nf)
@@ -163,26 +171,21 @@ def read_data(pna, points, sample_id, power, temp, centerf, segments : list = No
 
     # save files
     # create a new directory for the output to be put into
-    
-    directory_name = timestamp_folder(os.getcwd() + '\\' + data_dir + '\\', centerf, sample_id)
-    
-    if not os.path.exists(directory_name):
-        print(f'      directory_name: {directory_name}')
-        print(f'      Does not exist. Making new directory.')
-        os.mkdir(directory_name)
+    if output_filepath is None:
+        output_filepath = timestamp_folder(os.getcwd() + '\\', centerf, sample_id)
         
-    #open output file and put data points into the file
-    if output_file is not None:
-        filename = output_file
-    else:
-        filename = name_datafile(sample_id, power, temp, cfreq, seg_str)
+    if output_filename == None or output_filename == '':
+        if verbose:  print(f"{output_filename=}, using name_datafile")
+        output_filename = name_datafile(power, temp, cfreq, sample_id, filename_suffix)
         
-    if filename[-4:] != '.csv':
-        filename += '.csv'
+    print(f'      File Directory: {output_filepath}')
+    print(f"      Filename: {output_filename}")
+    if not os.path.exists(output_filepath):
+        print(f'\n      ~~!!  Directory does not exist. Making new directory.')
+        os.makedirs(output_filepath)
         
-    final_savepath = directory_name + filename
-    file = open(final_savepath, 'w')
-    print("saving at: ", final_savepath)
+    # use python to save data... line by line...
+    file = open(f"{output_filepath}\\{output_filename}", 'w')
     
     count = 0
     for i in freq:
@@ -193,26 +196,26 @@ def read_data(pna, points, sample_id, power, temp, centerf, segments : list = No
 def get_data(centerf: float, 
              span: float, 
              temp: float, 
-             output_file: str = None,
+             output_filename: str = None,
              averages: int = 100, 
              power: float = -30, 
              edelay: float = 76, 
              ifband_khz: float = 5, 
              points: int = 201, 
              sample_id: str = 'sample',
-             # instr_addr : str = 'GPIB::16::INSTR', # If using GPIB
-             # instr_addr : str = 'TCPIP0::69.254.35.52::islip0::INSTR1', # Old address from JILA lab
+            #  instr_addr : str = 'GPIB::16::INSTR', # If using GPIB  7/18
              instr_addr : str = 'TCPIP0::169.254.89.124::hislip0::INSTR',
              sparam : str = 'S21',
              cal_set : str = None,
              setup_only : bool = False,
              segments : list = None,
-             seg_str : str = None,
-             data_dir : str = '.\\'):
+             filename_suffix : str = None,
+             data_dir : str = '.\\',
+             verbose : bool = False):
     '''
     function to get data and put it into a user specified file
     '''
-    print(f"Connecting to {instr_addr}")
+    if verbose: print(f"\nStarting new measurement. \nConnecting to {instr_addr}")
     #set up the PNA to measure s21 for the specific instrument GPIB0::16::INSTR
     rm = pyvisa.ResourceManager()
     keysight = rm.open_resource(instr_addr)
@@ -230,14 +233,15 @@ def get_data(centerf: float,
     #     print(f'\n----------\nException:\n{ex}\n----------\n')
     #     print(f'Trying GPIB address {GPIB_addr} ...')
     #     keysight = rm.open_resource(GPIB_addr)
-        # keysight = rm.open_resource(instr_addr)
-    print("  Setting up PNA.")
+    #     keysight = rm.open_resource(instr_addr)
+        
+    if verbose: print("  Setting up PNA.")
     pna_setup(keysight, points, centerf, span, ifband_khz, power, edelay, averages,
               sparam=sparam, cal_set=cal_set, segments=segments)
 
     if setup_only:
         return
-    print(f"Beginning measurement for:\n   power = {power} dBm, averages = {averages}, IFBW = {ifband_khz} kHz")
+    print(f"\nMeasuring at for:\n   power = {power} dBm, averages = {averages}, IFBW = {ifband_khz} kHz")
     
     keysight.timeout = 30000
     
@@ -256,28 +260,37 @@ def get_data(centerf: float,
     while(True):
         # print(keysight.query('STAT:OPER:AVER1:COND?'))
         time.sleep(1)
-        print(f"      time elapsed: {time.time() - tstart:1.0f}s")
+        t_elapsed = time.time() - tstart
+        print(f"      time elapsed: [{t_elapsed:1.0f}s]")
+            
         if (keysight.query('STAT:OPER:AVER1:COND?')[1] != "0"):
-            print(f"      Trace finished. Uploading now.")
+            print(f"\nTrace finished. Uploading now.")
+            print(f"\n   Total time elapsed: {t_elapsed:1.0f} seconds")
+            if t_elapsed >= 600:
+                print(f"                     = {t_elapsed/60:1.1f} minutes \n")
             cnt += 1
             break
         
     keysight.write('DISPlay:WINDow1:Y:AUTO')
     keysight.write('DISPlay:WINDow2:Y:AUTO')
     
-    print("  sending OPC?")
+    if verbose: print("  sending OPC?")
     keysight.query('*OPC?')
-    print("  sending *WAI?")
+    if verbose: print("  sending *WAI?")
     keysight.write('*WAI')
     time.sleep(3.0)
-    print("  sending HOLD")
+    if verbose: print("  sending HOLD")
     keysight.write('SYSTem:CHANnels:HOLD')
 
-    print("  Reading PNA Data.")
-    read_data(keysight, points, sample_id, power, temp,
-            centerf, segments=segments, seg_str=seg_str, data_dir=data_dir)
+    if verbose: print("  Reading PNA Data.")
+    read_data(keysight, points, 
+              sample_id, power, 
+              temp, centerf, 
+              output_filename=output_filename,
+              segments=segments, output_filepath=data_dir, 
+              filename_suffix=filename_suffix, verbose=verbose)
 
-    print("  Finished reading, shutting off output.")
+    if verbose:  print("  Finished reading, shutting off output.")
     keysight.write('SYSTem:CHANnels:RESume')
     keysight.write('OUTPut:STATe OFF')
 
@@ -291,16 +304,17 @@ def power_sweep(startpower: float,
                 edelay: float = 76, 
                 ifband_khz: float = 5, 
                 points: int = 201, 
-                sample_id: str = 'sample',
-                sparam : str = 'S21',
-                adaptive_averaging : bool = True,
-                cal_set : str = None,
-                setup_only : bool = False,
+                sample_id: str = 'sample', 
+                sparam : str = 'S21', 
+                output_filename : str = None, 
+                adaptive_averaging : bool = True, 
+                cal_set : str = None, 
+                setup_only : bool = False, 
                 segments : list = None, 
-                seg_str : str = None,
-                instr_addr : str = 'TCPIP0::K-N5222B-21927::hislip0,4880::INSTR',
-                output_file : str = None,
-                data_dir : str = '.\\'):
+                filename_suffix : str = None, 
+                instr_addr : str = 'TCPIP0::K-N5222B-21927::hislip0,4880::INSTR', 
+                data_dir : str = '.\\',
+                verbose : bool = False): 
 
     '''
     run a power sweep for specified power range with a certain number of sweeps
@@ -334,45 +348,63 @@ def power_sweep(startpower: float,
     #     file.close()
 
     #run each sweep
-    for power in sweeps:
-        print(f'{power} dBm, {averages//1} averages ...')
-        get_data(centerf, span, 
-                 temp, output_file, 
-                 averages, power,
-                 edelay, ifband_khz, 
+    for idx, power in enumerate(sweeps):
+        
+        print(f'\n~~~~~~> [{power} dBm -> power ({idx+1}/{len(sweeps)})] <~~~~~~ ')
+        get_data(centerf, 
+                 span, 
+                 temp, 
+                 output_filename, 
+                 averages, 
+                 power,
+                 edelay, 
+                 ifband_khz, 
                  points,
                  sample_id, 
+                 instr_addr,
                  sparam=sparam, 
                  cal_set=cal_set, 
                  setup_only=setup_only, 
                  segments=segments,
-                 seg_str=seg_str,
-                 instr_addr=instr_addr,
-                 data_dir = data_dir)
+                 filename_suffix=filename_suffix,
+                 data_dir = data_dir,
+                 verbose = verbose)
         
         if adaptive_averaging: 
             averages = averages * ((10**(stepsize/10))**0.5)
-    print('Power sweep completed.')
+    print('\nPower sweep completed.')
 
 
-def name_datafile(sample_id: str = None,
-                  power: float = None,
+def name_datafile(power: float = None,
                   temp: float = None,
                   freq: float = None,
-                  seg_str: str = None) -> str:
+                  sample_id: str = None,
+                  filename_suffix: str = None) -> str:
     
     if sample_id is None:  sample_id = "MissingSampleID"
     if power is None:      power = 999
     if temp is None:       temp = -1
     if freq is None:       freq = 0
-    if seg_str is None:    seg_str = ''
     
-    # Check that the file does not have an extension, otherwise strip it
+    # suffix is .csv by default 
+    if filename_suffix == "" or filename_suffix == None:  
+        filename_suffix = ".csv"
+        
+    elif filename_suffix.startswith("_") is False:
+        # add an underscore to the front if suffix is not empty
+        filename_suffix = "_" + filename_suffix
+    
+    # make sure the filename ends with csv
+    if filename_suffix.endswith("csv") is False:
+        filename_suffix += ".csv"
+    
     # Use f-strings to make the formatting more compact
-            
-    filename = f'{sample_id}_{freq:.3f}GHz_{power:.0f}dB_{temp:.0f}mK_{seg_str}'
+    # print(f"{type(output_filepath)}, {type(sample_id)}, {type(freq)}, {type(power)}, {type(temp)}, {type(filename_suffix)}")
+    
+    filename = f'{sample_id}_{freq:.3f}GHz_{power:.0f}dB_{temp:.0f}mK'
     filename = filename.replace('.','p')
-
+    filename += filename_suffix  # suffix has .csv, dont want that . to be turned into a p   :)
+    
     return filename
     
 def timestamp_folder(data_dir: str = None, centerf = None, sample_id: str='powersweep') -> str:
@@ -387,15 +419,16 @@ def timestamp_folder(data_dir: str = None, centerf = None, sample_id: str='power
         Returns:
             Formatted path eg. dir/5p51414GHz_HPsweep_200713_12_18_04/ 
     """
-    now = time.strftime("%y%m%d", time.localtime())
+    # now = time.strftime("%y%m%d", time.localtime())
+    now = datetime.today().strftime(r'%b_%d_%H%M')
     
-    
-    output = f'{sample_id}_{centerf:.3f}GHz'
+    output = f'{now}\\{sample_id}_{centerf:.3f}GHz'
     output = output.replace('.','p')
     
-    if dir != None:
+    if data_dir is None:
         output_path = data_dir  # bypass
     else:
-        output_path = output + '/'
+        output_path = output + '\\'
+    
     return output_path
 

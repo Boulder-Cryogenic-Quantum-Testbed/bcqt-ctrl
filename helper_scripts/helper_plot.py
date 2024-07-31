@@ -11,12 +11,59 @@
 import glob, os, sys, time
 
 import matplotlib.pyplot as plt
+import pandas as pd
 import regex as re
 import numpy as np
 import scipy as sp
 
 import helper_misc as hm
 import helper_fit as hf
+import helper_load as hl
+
+# %%
+def plot_multiple_resonators(filepaths, column_headers=["Freq", "Magn", "Phase"], plot_config_dict=None, debug=False, **kwargs):
+    
+    if plot_config_dict is None:
+        plot_config_dict = {
+            "add_zero_lines" : True,
+            "plot_complex" : True,
+            "find_peaks" : False,
+            "save_plot" : True,
+            "plot_filepath" : None,
+            "plot_filename" : None,
+        }
+    
+    # add all kwargs to plotting dict
+    plot_config_dict.update(kwargs)
+    
+    all_figs, all_axes = [], []
+    
+    # TODO: I should have just included the csv loading one by one, rather than all at once
+    # dataframe_dict = hl.load_many_csvs_as_dataframes(search_dir)
+    
+    for csv_filepath in filepaths:
+        
+        resonator_folder = os.path.dirname(csv_filepath)
+        plot_directory = f"{resonator_folder}\\data_plots"
+        hm.check_and_make_dir(plot_directory)
+        
+        df = pd.read_csv(csv_filepath, names=column_headers)
+        filename = os.path.basename(csv_filepath).replace(".csv","")
+        
+        plot_config_dict["plot_filepath"] = f"{plot_directory}"
+        plot_config_dict["plot_filename"] = f"{filename}_plot.csv"
+        plot_config_dict["plot_title"] = filename.replace(".csv","")
+        
+        freqs_GHz = df["Freq"] if any(df["Freq"] >= 1e9) else df["Freq"] * 1e9
+        magn_dBm = df["Magn"]
+        phase = df["Phase"]
+        
+        fig, axes = plot_S21_data(freqs_GHz, plot_config_dict, magn_dBm=magn_dBm, phase=phase, debug=debug)    
+        
+        all_figs.append(fig)
+        all_axes.append(axes)            
+
+    return all_figs, all_axes
 
 
 # %%
@@ -36,7 +83,10 @@ def plot_S21_data(freq, plot_config_dict, debug=False, **kwargs):
         #     else:
         #         print(key, value)
 
+    
     ############ check method kwargs for data loading
+    if any(freq >= 1e9):  # check if frequencies are not in GHz
+        freq /= 1e9  # if so, assume Hz then divide by 1e9
     if "real" in keys: # real & imag -> cmpl
         if debug: print("    ~~ Received real & imag dataset")
         real = kwargs["real"]
@@ -73,25 +123,27 @@ def plot_S21_data(freq, plot_config_dict, debug=False, **kwargs):
             if any(phase > 2.1*np.pi) or any(phase < -2.1*np.pi):
                 if debug: print("hf.quick_plot_data:  Converting input phase from degrees to radians.")
                 phase_deg = kwargs["phase"]
-                phase = np.rad2deg(phase_deg)
+                phase = np.deg2rad(phase_deg)
             cmpl = magn_lin * np.exp(1j * phase)
             real = np.real(cmpl)
             imag = np.imag(cmpl)
 
 
     ############ check plot config dictionary
+    plot_config_dict.update(**kwargs)
     config_keys = plot_config_dict.keys()
     if debug: 
         print("    ~~ printing all plot_config_dict items ")
-        # for key, value in plot_config_dict.items():
-        #     if type(value) is not bool:
-        #         if len(value) < 10:
-        #             print(key, value)
-        #         else:
-        #             print(key, type(value))
-        #     else:
-        #         print(key, value)
-                
+        for key, value in plot_config_dict.items():
+            if type(value) is not bool:
+                if len(value) < 10:
+                    print(key, value)
+                else:
+                    print(key, type(value))
+            else:
+                print(key, value)
+    
+    # TODO: use default matplotlib rcparams like a normal human being...   
     if "plot_title" in config_keys:
         fig_title = plot_config_dict["plot_title"]     
         
@@ -99,7 +151,7 @@ def plot_S21_data(freq, plot_config_dict, debug=False, **kwargs):
         if debug: print("    ~~ Received figsize")
         figsize = plot_config_dict["figsize"] 
     else:
-        figsize = (10, 6)
+        figsize = (8, 6)
         
     if "mosaic" in config_keys:
         if debug: print("    ~~ Received mosaic")
@@ -109,43 +161,83 @@ def plot_S21_data(freq, plot_config_dict, debug=False, **kwargs):
             mosaic = "AACCC\n BBCCC"
         else:
             mosaic = "AAA\n BBB"
-        
+            
     if "markersize" in config_keys:
         markersize = plot_config_dict["markersize"]    
     else:
-        markersize = 4
+        markersize = 3
+        
+    if "label_size" in config_keys:
+        label_size = plot_config_dict["label_size"]    
+    else:
+        label_size = 12
+        
+    if "tick_label_size" in config_keys:
+        tick_label_size = plot_config_dict["tick_label_size"]    
+    else:
+        tick_label_size = 12
+        
+    if "title_size" in config_keys:
+        title_size = plot_config_dict["title_size"]    
+    else:
+        title_size = 16
+        
+    if "text_size" in config_keys:
+        text_size = plot_config_dict["text_size"]    
+    else:
+        text_size = 12
         
     magn_lin = np.abs(cmpl)
     phase = np.unwrap(np.angle(cmpl))
 
-    fig, axes_dict = plt.subplot_mosaic(mosaic, figsize=(10,6), tight_layout=True)
+    fig, axes_dict = plt.subplot_mosaic(mosaic, figsize=figsize, tight_layout=True)
     ax1, ax2 = axes_dict["A"], axes_dict["B"]
     axes = list(axes_dict.values())
-    tick_label_size = 12
     
-    ax1.plot(freq, magn_lin, 'ko', markersize=markersize)
-    ax1.set_xlabel("Frequency [GHz]", size=14)
-    ax1.set_ylabel("S21 [a.u.]", size=14)
-    ax1.set_title("Magnitude Data", size=16)
+    ax1.plot(freq, magn_lin, 'ko', markersize=markersize, alpha=0.9)
+    ax1.set_xlabel("Frequency [GHz]", size=label_size)
+    ax1.set_ylabel("S21 [a.u.]", size=label_size)
+    ax1.set_title("Magnitude Data", size=title_size)
     
-    ax2.plot(freq, phase, 'ro', markersize=markersize)
-    ax2.set_xlabel("Frequency [GHz]", size=14)
-    ax2.set_ylabel("Phase [rad]", size=14)
-    ax2.set_title("Phase Data", size=16)
+    ax2.plot(freq, phase, 'ro', markersize=markersize, alpha=0.9)
+    ax2.set_xlabel("Frequency [GHz]", size=label_size)
+    ax2.set_ylabel("Phase [rad]", size=label_size)
+    ax2.set_title("Phase Data", size=title_size)
+    
+    if "find_peaks" in config_keys:
+        pks_idx, _ = sp.signal.find_peaks(-1*magn_lin, distance=len(freq)*0.2, prominence=2)
+        pk_freqs = [freq[idx] for idx in pks_idx]
+        
+        # TODO: maybe rainbow instead of red peaks? :)
+        if len(pk_freqs) <= 5 and len(pk_freqs) != 0:
+            for pk in pk_freqs:
+                print(f"     > Resonance at:  {pk:1.9} GHz")
+                ax1.plot(freq[pks_idx], magn_lin[pks_idx], 'ro', label=f"{pk:1.6f} GHz",
+                    markerfacecolor='none', markersize=markersize, markeredgewidth=2)
+            ax1.legend()
+        elif len(pk_freqs) == 0:
+            ax1.text(0.6, 0.9, "No peaks found", color='red', fontsize=text_size,
+                         horizontalalignment='center', verticalalignment='center', transform = ax1.transAxes)
+    
+        else:
+            ax1.text(0.6, 0.9, "Too many \npeaks found", color='red', fontsize=text_size,
+                         horizontalalignment='center', verticalalignment='center', transform = ax1.transAxes)
     
     if "plot_complex" in config_keys:
         ax3 = axes_dict["C"]
-        ax3.plot(real, imag, 'bo')
-        ax3.set_xlabel("Real [a.u.]", size=14)
-        ax3.set_ylabel("Imag [a.u.]", size=14)
-        ax3.set_title("Complex Data", size=16)
+        ax3.plot(real, imag, 'bo', markersize=markersize, markerfacecolor='none')
+        ax3.set_xlabel("Real [a.u.]", size=label_size)
+        ax3.set_ylabel("Imag [a.u.]", size=label_size,)
+        ax3.set_title("Complex Data", size=title_size)
         ax3.set_aspect('equal') 
+        ax3.yaxis.tick_right()
+        ax3.yaxis.set_label_position("right")
       
-    fig.suptitle(fig_title, size=20)
+    fig.suptitle(f"Raw Data Plot\n\n{fig_title}", size=title_size+2)
     
     for ax in axes:
-        ax.tick_params(axis='x', labelsize=12)
-        ax.tick_params(axis='y', labelsize=12)
+        ax.tick_params(axis='x', labelsize=tick_label_size)
+        ax.tick_params(axis='y', labelsize=tick_label_size)
         
     if "add_zero_lines" in config_keys:
         val = plot_config_dict["add_zero_lines"]
@@ -154,87 +246,26 @@ def plot_S21_data(freq, plot_config_dict, debug=False, **kwargs):
             ax3.axhline(0, linestyle=':', color='k')  
             ax3.axvline(0, linestyle=':', color='k')
     
-    if "plot_filename" in config_keys and plot_config_dict["plot_filename"] is not None:
-        plot_filename = plot_config_dict["plot_filename"]
+    fig.tight_layout()
+    
+    if "show_plot" in config_keys:
+        plt.show()
+    else:
+        plt.close()
+        
+    if "plot_filepath" in config_keys and "save_plot" in config_keys:
+        
+        # TODO: add error messages for save_plot = true and plot_filepath = false, etc
         plot_filepath = plot_config_dict["plot_filepath"]
-        if plot_filepath is not None and plot_filename is not None:
+        plot_filename = plot_config_dict["plot_filename"]
+        
+        if plot_filepath is not None:
             print(f"    Saving plot for {plot_filename} in {plot_filepath}")
-            fig.savefig(plot_filepath + "\\" + plot_filename, format='png')
-            
+            fig.savefig(f"{plot_filepath}\\{plot_filename}.png", format='png')
         
     return fig, axes
         
-        
-  
-def visualize_data(filenames, data_dirs, fcs, spans, powers, add_zero_lines=True,
-                   fscale=1e9, filetype='pdf', show_plots=True, plot_dir=None):
-    
-    sparam = 'S21'
-    # Determine number of frequency segments
-    # if fcs is None:
-    #     Nf = int(round((f2 - f1) / freq_step))
-    #     center_freqs = [freq_band[0] + (1 + 2*j) * freq_step / 2 for j in range(Nf)]
-    # else:
-    #     center_freqs = fcs
-        
-    # Read the data and concatenate
-    # freqs  = np.array([])
-    # S21mag = np.array([])
-    # S21ph  = np.array([])
-    
-    for data_dir in data_dirs:
-        for fname in filenames:
-            try:
-                data = np.genfromtxt(data_dir + fname, delimiter=',').T
-            except FileNotFoundError: 
-                print(f"debug: {fname} not in {data_dir}")
-                continue
-            
-            freqs = data[0]
-            S21mag = 10**(data[1]/20)  # convert dBmV to mV
-            S21ph = np.deg2rad(data[2])  # convert degrees to rad
-            S21 = S21mag * np.exp(1j * S21ph)  # combine into complex number
-        
-            # Read the frequency band and powers used, use f strings to format
-            f1 = f'{freqs[0]:1.2f}'.replace('.','p') 
-            f2 = f'{freqs[-1]:1.2f}'.replace('.','p')
-            
-            # Plot the results
-            # fig, (ax1, ax2) = plt.subplots(2, 1, tight_layout=True, figsize=(10,6))
-            mosaic = "AACCC\n BBCCC"
-            fig, axes = plt.subplot_mosaic(mosaic, figsize=(10,6), tight_layout=True)
-            ax1, ax2, ax3 = axes["A"], axes["B"], axes["C"]
-            fsize = 16
-            
-            ax1.plot(freqs / fscale, S21mag, 'k.', markersize=4)
-            ax2.plot(freqs / fscale, np.unwrap(S21ph), 'r.', markersize=4)
-            ax1.set_ylabel(r'$|S_{%s}|$' % sparam[1:], fontsize=fsize)
-            ax2.set_xlabel('Frequency [GHz]', fontsize=fsize)
-            ax2.set_ylabel(r'$\left< S_{%s} \right.$' % sparam[1:], fontsize=fsize)
-            fig.suptitle(fname, fontsize=20)
-            
-            ax3.plot(np.real(S21), np.imag(S21), 'bo', markersize=6)
-            
-            if add_zero_lines is True:
-                ax3.axhline(0, color='k', linestyle=':', linewidth=2)
-                ax3.axvline(0, color='k', linestyle=':', linewidth=2)
-                
-            ax3.set_aspect('equal')
-            ax3.set_ylabel("Imaginary")
-            ax3.set_xlabel("Real")
-            ax3.set_title("Complex Plane")
-            
-            # create plot directory
-            if plot_dir is not None:
-                hm.check_and_make_dir(plot_dir+data_dir)
-                savepath = plot_dir + data_dir + f'{fname}_check.{filetype}'.replace('.csv','')
-                fig.savefig(savepath, format=filetype)
-                print("saved check plot at: ", savepath)
-            
-            if show_plots is not True:
-                plt.close('all')
-
-
+      
  
 def plot_dataframe(list_of_df_dicts):
     ## Plot the internal and external quality factors separately
@@ -278,6 +309,7 @@ def plot_dataframe(list_of_df_dicts):
   
   
 def plot_data_file_dict(data_file_dict, plot_config_dict):
+    # TODO: replace with plot_21_data
     for filename, filepath in data_file_dict.items():
         print(f"\n~~~> Loading {filename} from '{filepath}' ")
         fn = filepath + filename

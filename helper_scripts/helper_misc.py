@@ -100,7 +100,7 @@ def clean_directory(search_dir, regex_expr=".*", search_str="\\*", dry_run=True,
     
     for idx, name in enumerate(delete_list):
         print(f"    [{idx}] xxx -", name )
-        
+    
     time.sleep(1) # to let print statements catch up to input()
     
     print(f"Prompting user if they'd are okay with deleting {len(delete_list)} files:  [Y/n]")
