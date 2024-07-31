@@ -13,7 +13,9 @@
 %load_ext autoreload
 %autoreload 2
 
-%run ../setup_measurement
+# usually I will put this setup script in the directory above, to 
+# keep it consistent between all devices measured each cooldown
+%run ../setup_measurement  
 
 import sys, time, os, glob
 import numpy as np
