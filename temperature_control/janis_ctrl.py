@@ -141,7 +141,7 @@ class JanisCtrl(object):
         if self.socket is not None:
             if self.verbose is True: 
                 print('Setting current to 0 ...')
-            self.set_current(0.)
+            # self.set_current(0.)   # TODO: causing crashes?
             self.socket.close()
             self.socket = None
 
@@ -238,8 +238,8 @@ class JanisCtrl(object):
                 Z, T, tstamp, status = data.split(',')
                 tstamp = tstamp.split(' ')
                 tstamp = tstamp[0].split('.')[0]
-                Z = float(Z)
-                T = float(T)
+                Z = float(Z) 
+                T = float(T) 
                 if print_output is True:
                     print(f'{tstamp}, {key}: {T:.4g} K')
                 temp_dict[key] = (Z, T)
@@ -643,11 +643,12 @@ class JanisCtrl(object):
         if self.vna_numsweeps > 1:
             powers = [int(x) for x in np.linspace(self.vna_startpower, self.vna_endpower,
                                  self.vna_numsweeps)]
+            
             print(f'\nMeasuring at {self.vna_centerf} GHz')
             print(f'IFBW: {self.vna_ifband} kHz')
             print(f'Span: {self.vna_span} MHz')
             print(f'Npoints: {self.vna_points}')
-            print(f'Nsweeps: {self.vna_numsweeps}')
+            print(f'Averages: {self.vna_numsweeps}')
             print(f'Powers: {powers} dBm')
             print(f"data directory:  {self.data_dir}\n")
 
@@ -942,7 +943,47 @@ def multiple_resonator_driver(Jctrl : JanisCtrl):
             start_powers, end_powers, num_powers, sample_name,
             avgs, pts=1001, sparam='S21')
 
-def compute_segments(fc, span, p, pc, beta, fscale, Noffres, offresfraction, Nf=None,
+def compute_segments_segmented(fc, span, fscale, Npts, offresfraction=0.1, segment_gap=0.1):
+    """
+        Computes segments needed to do segmented... in a sane way...
+        
+          If I want 20% of my points to be in the off-resonant sections of
+        the frequency span, then offresfraction = 0.2
+          i.e. f_a is at the 10% mark, and f_b is at the 90% mark
+        
+          Since 20% of my points are off-res, then 80% of my points are
+        on resonance, i.e. between f_a and f_b. So this means, for a given
+        Npts, the proportion of pts for the middle segment is 1-offresfrac/2, 
+        and the proportion of pts for the outer segments is offresfrac/2. 
+        e.g. for offresfrac = 0.2, the outer segments have Npts*0.1, and the
+        middle segment has Npts*0.8
+        
+    """
+    
+    # Compute the frequencies
+    fstart = fc - span / 2
+    fstop  = fc + span / 2
+    fa = fstart + (offresfraction * span)
+    fb = fstop  - (offresfraction * span)
+    gap = span * segment_gap
+    
+    Npts_offres = int(Npts * offresfraction/2)
+    Npts_onres = int(Npts * (1 - offresfraction/2))
+    
+    # print(f"{fa=}\n{fb=}\n{gap=}\n{span=}\n{segment_gap=}")
+    
+      # format: [ ,?,  npts of seg,   f_start of seg,  f_stop of seg ]
+    segments = [f',1, {Npts_offres}, {fstart*fscale},   {(fa-gap/2)*fscale}',
+                f',1, {Npts_onres} , {(fa+gap/2)*fscale}, {(fb-gap/2)*fscale}',
+                f',1, {Npts_offres}, {(fb+gap/2)*fscale},     {fstop*fscale}']
+    # why is that ,1, there!?!?!?!?! I thought it was related to the VNA... but it isn't
+        
+    # segments shouldnt have spaces, but it looks pretty with them :)
+    segments = [s.replace(" ", "") for s in segments]  # sanitize any spaces for each string
+    
+    return segments
+
+def compute_segments(fc, span, p, pc, beta, fscale, Noffres, offresfraction, Npts, Nf=None,
         option='hybrid'):
     """
     Computes segments needed to perform homophasal measurements
@@ -974,7 +1015,7 @@ def compute_segments(fc, span, p, pc, beta, fscale, Noffres, offresfraction, Nf=
         freq = fc * (1 - 0.5 * np.tan(theta / 2) / Q)
 
         np.set_printoptions(precision=4)
-
+        
         # Homophasal, near resonance
         hsegments = [f',1,2,{ff1*fscale},{ff2*fscale}'
                 for ff1, ff2 in zip(freq[0::2], freq[1::2])][1:-1]
@@ -986,8 +1027,9 @@ def compute_segments(fc, span, p, pc, beta, fscale, Noffres, offresfraction, Nf=
                     f',1,{Noffres},{fap},{fstart*fscale}']
         
     elif option == 'segmented':  
+        print("Using compute_segments instead of compute_segments_segmented for segmented...!")
         segments = [f',1,{Noffres},{fstart*fscale} ,{fa*fscale}',
-                    f',1,{Noffres * (1-2*offresfraction)/offresfraction}, {fa*fscale}, {fb*fscale}',
+                    f',1,{Noffres * (1 - 2*offresfraction)}, {fa*fscale}, {fb*fscale}',
                     f',1,{Noffres} ,{fb*fscale}, {fstop*fscale}']
         
     elif option == 'linear':
@@ -1004,13 +1046,14 @@ def measure_multiple_resonators(fcs, spans, delays, powers,
                                 ifbw=None, sparam='S21', npts=None,
                                 adaptive_averaging=False, sample_name='',
                                 runtime=1., cal_set=None, start_delay=0.,
-                                offresfraction=0.45, is_segmented=True, filename_suffix="homophasal",
+                                offresfraction=0.45, segment_gap=0.1, is_segmented=True, filename_suffix="homophasal",
                                 segment_option="homophasal", Navg_init=None, Noffres=5, Nf=None,
                                 pc=-75., beta=0.2, bypass_janis=False, file_names=None, 
                                 data_dirs=None, verbose=False, Jctrl_dict=None, wait_time = 0,):
     """
-    Measures multiple resonators sequentially
+        Measures multiple resonators sequentially
     """
+    
     # Example inputs to run a temperature sweep
     # Iterate over a list of temperatures
     # 30 mK -- 300 mK, 10 mK steps
@@ -1106,15 +1149,19 @@ def measure_multiple_resonators(fcs, spans, delays, powers,
         if is_segmented:
             fscale = 1e9 if fc < 1e9 else 1.
             span *= 1e-3
-            fstart = fc - span / 2
+            fstart = fc - span / 2 
             fstop  = fc + span / 2
             fa = fstart + offresfraction * span / 2
             fb = fstop  - offresfraction * span / 2
 
-            # segments = compute_homophasal_segments()
-            p = p1
-            segments = compute_segments(fc, span, p, pc, beta, 
-                    fscale, Noffres, offresfraction, Nf=Nf, option=segment_option)
+            # bandaid fix to this awful section of the code
+            if segment_option == "segmented":
+                segments = compute_segments_segmented(fc, span, fscale, npts, offresfraction, segment_gap)
+            else:
+                # segments = compute_homophasal_segments()
+                p = p1
+                segments = compute_segments(fc, span, p, pc, beta, 
+                        fscale, Noffres, offresfraction, Nf=Nf, option=segment_option)
             
             # Q = 10 * (fc / span)
             # if segment_option == 'homophasal':
@@ -1153,21 +1200,32 @@ def measure_multiple_resonators(fcs, spans, delays, powers,
 
         if bypass_janis is not True:
             # Read the MXC temperature from the CMN
-            Z, T, tstamp = Jctrl.read_cmn()
-            if Jctrl.verbose is True:
-                print(f'\n{tstamp}, {Z} ohms, MXC CMN: {T*1e3:.2f} mK\n')
-                # Read the flow rate
+            # TODO: track how many times this has failed
+            try:  
+                # read from CMN and flow meter
+                Z, T, tstamp = Jctrl.read_cmn()
                 flow_V, flow_umol_s1, tstamp = Jctrl.read_flow_meter()
-                print(f'\n{tstamp}, {flow_V} V, {flow_umol_s1:.2f} umol / s\n')
-            else:
-                print(f'\n{tstamp}, MXC CMN: {T*1e3:.2f} mK\n')
+                
+                # read from lakeshore
+                Jctrl.read_temp('all')  
+                Jctrl.read_pressure('all')  
+                
+                if Jctrl.verbose is True:
+                    print(f'\n{tstamp}, {Z} ohms, MXC CMN: {T*1e3:.2f} mK\n')
+                    print(f'\n{tstamp}, {flow_V} V, {flow_umol_s1:.2f} umol / s\n')
+                else:
+                    print(f'\n{tstamp}, MXC CMN: {T*1e3:.2f} mK\n')
             
-            # Read and report all temperatures and pressures
-            Jctrl.read_temp('all')
-            Jctrl.read_pressure('all')
-        else:
+            except Exception as error:
+                print(f"Failed to read from CMN. Exception: \n{error}")
+                
+                Z, T, tstamp = [-1]*3
+                flow_V, flow_umol_s1, tstamp = [-1]*3
+            
+        else:  
             Z, T, tstamp = [-1]*3
             flow_V, flow_umol_s1, tstamp = [-1]*3
+            
                     
         # Enter a sample name and perform the PNA power sweep
         ## Note: adaptive_averaging will increase the averages
@@ -1178,6 +1236,10 @@ def measure_multiple_resonators(fcs, spans, delays, powers,
             Jctrl.close_socket()
             time.sleep(start_delay * h2s)
         out = {}
+        
+        for s in segments:
+            print(s)
+            
         Jctrl.pna_process('meas', T, out, prefix=sample_name,
                           adaptive_averaging=adaptive_averaging,
                           cal_set=cal_set, setup_only=False, 
@@ -1250,3 +1312,58 @@ def measure_multiple_resonators(fcs, spans, delays, powers,
 #     Jctrl.set_current(0.)
 #     Z, T, tstamp = Jctrl.read_cmn()
 #     # print(f'{tstamp}, {Z} ohms, {T*1e3} mK')
+
+
+
+
+"""
+
+some test code 
+
+fc = 5.5
+span = 1
+offresfraction = 0.45
+
+fstart = fc - span / 2
+fstop  = fc + span / 2
+fa = fstart + (offresfraction * span)
+fb = fstop  - (offresfraction * span)
+
+print(f"{fc=}\n{span=}\n{fstart=}\n{fstop=}\n{fa=}\n{fb=}\n")
+
+Npts = 101
+Npts_offres = int(Npts * offresfraction/2)
+Npts_onres = int(Npts * (1 - offresfraction/2))
+
+
+print(f"{Npts=}\n{Npts_offres=}\n{Npts_onres=}")
+
+fig, ax1 = plt.subplots(1,1,figsize=(6,3))
+# fig, (ax1, ax2) = plt.subplots(2,1,figsize=(6,3))
+
+ax1.axvline(fstart, linestyle=":", color='k', label="fstart")
+ax1.axvline(fstop, linestyle=":", color='k')
+ax1.axvline(fa, linestyle="--", color='r')
+ax1.axvline(fb, linestyle="--", color='r')
+
+fa_x = np.linspace(fstart, fa, Npts_offres)
+fb_x = np.linspace(fb, fstop, Npts_offres)
+y_arr = [0.5]*len(fa_x)
+
+fres_x = np.linspace(fa, fb, Npts_onres)
+yres_arr = [0.5]*len(fres_x)
+
+ax1.plot(fa_x, y_arr, 'b.')
+ax1.plot(fb_x, y_arr, 'b.')
+ax1.plot(fres_x, yres_arr, 'g.')
+
+
+
+
+
+
+
+
+
+
+"""

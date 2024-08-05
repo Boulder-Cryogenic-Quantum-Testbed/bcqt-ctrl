@@ -146,7 +146,8 @@ def read_data(pna, points, sample_id, power, temp, centerf,
         for s in segments:
             ssplit = s.replace(" ", "").split(',')
             
-            # int() doesnt want a string of a float, so if it has a decimal, turn to float first
+            # int() doesnt want a string of a float like '12.0', so if it has  
+            # a decimal point, turn it into a float first
             nf = int(ssplit[2]) if '.' not in ssplit[2] else int(float(ssplit[2]))  
             f1 = float(ssplit[3])
             f2 = float(ssplit[4])
@@ -241,7 +242,8 @@ def get_data(centerf: float,
 
     if setup_only:
         return
-    print(f"\nMeasuring at for:\n   power = {power} dBm, averages = {averages}, IFBW = {ifband_khz} kHz")
+    
+    print(f"\nMeasuring {centerf} GHz for parameters:\n   power = {power} dBm, averages = {averages}, IFBW = {ifband_khz} kHz")
     
     keysight.timeout = 30000
     
@@ -383,7 +385,7 @@ def name_datafile(power: float = None,
     
     if sample_id is None:  sample_id = "MissingSampleID"
     if power is None:      power = 999
-    if temp is None:       temp = -1
+    if temp is None:       temp = -99
     if freq is None:       freq = 0
     
     # suffix is .csv by default 
@@ -398,12 +400,13 @@ def name_datafile(power: float = None,
     if filename_suffix.endswith("csv") is False:
         filename_suffix += ".csv"
     
-    # Use f-strings to make the formatting more compact
+    # debug
     # print(f"{type(output_filepath)}, {type(sample_id)}, {type(freq)}, {type(power)}, {type(temp)}, {type(filename_suffix)}")
     
-    filename = f'{sample_id}_{freq:.3f}GHz_{power:.0f}dB_{temp:.0f}mK'
-    filename = filename.replace('.','p')
-    filename += filename_suffix  # suffix has .csv, dont want that . to be turned into a p   :)
+    # Use f-strings to make the formatting more compact
+    filename = f'{sample_id}_{freq:.3f}GHz_{power:.0f}dBm_{temp:.0f}mK'
+    filename = filename.replace('.','p') # add suffix after using replace to avoid ".csv" -> "pcsv"
+    filename += filename_suffix  
     
     return filename
     

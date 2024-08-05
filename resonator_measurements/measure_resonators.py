@@ -1,6 +1,5 @@
 # %%
 
- 
 """
     measure_resonators.py 
     
@@ -15,95 +14,137 @@
 %load_ext autoreload
 %autoreload 2
 
-# usually I will put this setup script in the directory above, to 
-# keep it consistent between all devices measured each cooldown
-%run ../setup_measurement  
+# usually I will put this setup script in parent directory, to 
+# keep initialization consistent between all device measurements
 
-import sys, time, os, glob
+%run ../setup_vna_measurement
+
+import sys, glob
+import time, os 
 import numpy as np
 import matplotlib.pyplot as plt
 import regex as re
 
 import misc_functions as mf
-import helper_plot as hp
-import plot_settings
+# import helper_plot as hp
  
 from datetime import datetime
 from janis_ctrl import measure_multiple_resonators
 
-%run ../setup_measurement
 
-# %%  establish measurement variables and parameters
+# %% to try and get rid of stupid style sheet issue
+import plot_settings
+plt.subplots(1,1)
+plt.plot()
+plt.show()
 
-# record date & time for measurement
+# %%  grab current time and format for use as dataset label
+
 dstr = datetime.today().strftime(r'%b_%d_%H%M')
 print(f"\n\nCurrent folder timestamp: {dstr}\n\n")
 
-# use folder name to get device name
+# use parent directory name to get device name
 base_dir = os.path.basename(os.getcwd())
 line_num, sample_name = re.split(r"_", base_dir, maxsplit=1)  # use regex to split only at first _
 
-# use VNA to record center frequencies
-all_fcs = [4.708899, 5.082241, 
-           5.450325, 5.847405, 
-           6.205773, #6.591279, 
-           6.968852]
+# %% determine measurement parameters 
 
-# choose which resonators to measure, and spans/delays
-fcs = all_fcs
-# fcs = all_fcs[-1]   
+# use VNA to record center frequencies and 
+# the span for each resonator measurement.
+all_fcs = [
+    4.301495, 4.669492, 
+    5.043651,
+    5.799332, 6.154336, 
+    6.537237, 6.913380
+          ] # GHz
 
-spans = [0.5, 0.5, 0.5, 1.0,
-         0.5, 0.5, 0.5]
-delays = [86.61]*len(fcs)
+all_spans = [0.5, 0.5,
+             0.5,
+             1.0, 0.5,
+             1.0, 1.0
+            ] # MHz
 
+###################################################
+##### choose here which resonators to measure #####
+###################################################
+# by default, measure all resonators
+idxs = [
+        0, 1, 
+        2, 
+        3, 4,
+        5, 6,
+        ]   
+
+# or choose a specific set  
+# idxs = [4, 7]  
+idxs = [1]  
+
+fcs = [all_fcs[idx] for idx in idxs]   
+
+###################################################
+###################################################
+
+# set electrical delay & span for each measurement
+delays = [86.65]*len(fcs)  
+spans = [all_spans[idx] for idx in idxs]
+
+# assert that every freq has an associated span & delay
+assert len(fcs) == len(spans), f"length of fcs =/= spans  ({len(fcs)} =/= {len(spans)})"
+assert len(fcs) == len(delays), f"length of fcs =/= delays ({len(fcs)} =/= {len(delays)} )"
+    
 # create strings for the filename frequencies and data directories 
 freq_strs = [f'{fc:.3f}GHz'.replace('.', 'p') for fc in fcs]
 data_dirs = [f'data\\{dstr}\\{sample_name}_{freq_str}' for freq_str in freq_strs]
 
-display(data_dirs)
+print(f"Running measurements, saving data in these directories:")
+print(*[f'   "{dir_str}"' for dir_str in data_dirs], sep="\n")  # neat format
 
-# %% estimate time
+# add an ending to the filename
+fname_suffix = "10dB_Atten"
 
-high_powers_floats = np.arange(-40, -54, -7) + 3
-med_powers_floats = np.arange(-54, -69, -7) + 3 
-low_powers_floats = np.arange(-72, -79, -6) + 3
-ultra_low_powers_floats = np.arange(-84, -91, -6)  + 3   
+# %% estimate runtime
 
-power_tuple_dict = { 
+# in case of multiple runs, might as well measure at diff powers
+offset = 0  # must be positive!!
+high_powers_floats = np.arange(-32, -54, -3) + offset
+med_powers_floats = np.arange(-57, -74, -3) + offset
+low_powers_floats = np.arange(-76, -84, -3) + offset
+ultra_low_powers_floats = np.arange(-87, -91, -3) + offset  # VNA stops at -90
+
+# ultra_low_powers_floats = [-90]
+power_tuple_dict = {  # comment a line if only measuring certain powers
                  # tuple name :  (num of power,  measurement duration in seconds)
-                    "HPow"  : (  len(high_powers_floats),      7  ), 
-                    "MPow"  : (   len(med_powers_floats),      52  ),  
-                    "LPow"  : (   len(low_powers_floats),      496  ),
-                    "ULPow" : ( len(ultra_low_powers_floats),  1233  )
+                    "HPow"  : (  len(high_powers_floats),      5     ), 
+                    "MPow"  : (   len(med_powers_floats),      34    ),  
+                    "LPow"  : (   len(low_powers_floats),      341   ),
+                    "ULPow" : ( len(ultra_low_powers_floats),  2042  )
                     }
 
 mf.estimate_resonator_runtime(power_tuple_dict, num_res=len(fcs))
-
-# use assert to make sure every freq has a span & delay
-assert len(fcs) == len(spans), f"length of fcs =/= spans  ({len(fcs)} =/= {len(spans)})"
-assert len(fcs) == len(delays), f"length of fcs =/= delays ({len(fcs)} =/= {len(delays)} )"
-    
-print(high_powers_floats, med_powers_floats, low_powers_floats, ultra_low_powers_floats)
+print(f"\nResonators to measure: \n  {fcs}\n")
+print(high_powers_floats, med_powers_floats, low_powers_floats, ultra_low_powers_floats, sep="\n")
 
 # %% high power scan
+
 high_powers = [int(x) for x in high_powers_floats]
 
-HPow_num_avgs, HPow_IFBW_kHz, HPow_num_pts = 3, 1, 301
+HPow_num_avgs, HPow_IFBW_kHz, HPow_num_pts = 5, 1.0, 301
  
 tStart_high = time.time()   
+mf.check_valid_fridge_temp()
 measure_multiple_resonators(fcs, spans, delays, high_powers, 
+                            Navg_init=HPow_num_avgs,
                             ifbw = HPow_IFBW_kHz, npts = HPow_num_pts,  
                             sample_name = sample_name, data_dirs = data_dirs, 
-                            Nf = int(HPow_num_pts*0.8), Navg_init = HPow_num_avgs,  # Nf = homosphasal fractions
-                            Noffres = int(HPow_num_pts*0.2),  offresfraction = 0.1, # variables for segmented
-                            filename_suffix="", verbose = False, wait_time = 3, 
-                            segment_option="segmented",
+                            offresfraction=0.2,  # first and last x% have (1-x)% of the points
+                            segment_gap=0.3,  # off-res & on-res points have a y% gap
+                            filename_suffix=fname_suffix, verbose = False, wait_time = 3, 
+                            segment_option="segmented", is_segmented = True,
                             # segment_option="linear",
                             # segment_option="homophasal",
                             # segment_option="hybrid",
                             )
-tEnd_high = time.time()
+tEnd_high = time.time() 
 
 
 mf.print_text_block(tStart_high, tEnd_high, HPow_num_avgs, HPow_num_pts, HPow_IFBW_kHz, num_powers=len(high_powers), num_resonators=len(fcs))
@@ -111,21 +152,24 @@ mf.print_text_block(tStart_high, tEnd_high, HPow_num_avgs, HPow_num_pts, HPow_IF
 for res_folder in data_dirs: 
     fig, ax = mf.plot_whole_directory(res_folder, "*\\*.csv", plot_dir=res_folder, 
                                         max_rows=5, verbose=False, plot_min=True, save_plot=True, show_plot=True)
-        
+
 
 
 # %% medium power scan
+
 med_powers = [int(x) for x in med_powers_floats]
 
-MPow_num_avgs, MPow_IFBW_kHz, MPow_num_pts = 80, 1.0, 301
+MPow_num_avgs, MPow_IFBW_kHz, MPow_num_pts = 100, 1.0, 151
 
 tStart_med = time.time()   
+mf.check_valid_fridge_temp()
 measure_multiple_resonators(fcs, spans, delays, med_powers, 
+                            Navg_init=MPow_num_avgs,
                             ifbw = MPow_IFBW_kHz, npts = MPow_num_pts,  
                             sample_name = sample_name, data_dirs = data_dirs,
-                            Nf = int(MPow_num_pts*0.8), Navg_init = MPow_num_avgs,  # Nf = homosphasal fractions
-                            Noffres = int(MPow_num_pts*0.2),  offresfraction = 0.1, # variables for segmented
-                            filename_suffix="", verbose = False, wait_time = 3, 
+                            offresfraction=0.2,  # first and last x% have (1-x)% of the points
+                            segment_gap=0.3,  # off-res & on-res points have a y% gap
+                            filename_suffix=fname_suffix, verbose = False, wait_time = 3, 
                             segment_option="segmented",
                             # segment_option="linear",
                             # segment_option="homophasal",
@@ -142,17 +186,20 @@ mf.print_text_block(tStart_med, tEnd_med, MPow_num_avgs, MPow_num_pts, MPow_IFBW
 
 
 # %% low power scan
+
 low_powers = [int(x) for x in low_powers_floats]
 
-LPow_num_avgs, LPow_IFBW_kHz, LPow_num_pts = 2400, 1.0, 101
+LPow_num_avgs, LPow_IFBW_kHz, LPow_num_pts = 2000, 1.0, 151
 
 tStart_low = time.time()   
+mf.check_valid_fridge_temp()
 measure_multiple_resonators(fcs, spans, delays, low_powers,
+                            Navg_init=LPow_num_avgs,
                             ifbw = LPow_IFBW_kHz, npts = LPow_num_pts,  
                             sample_name = sample_name, data_dirs = data_dirs,
-                            Nf = int(LPow_num_pts*0.8), Navg_init = LPow_num_avgs,  # Nf = homosphasal fractions
-                            Noffres = int(LPow_num_pts*0.2),  offresfraction = 0.1, # variables for segmented
-                            filename_suffix="", verbose = False, wait_time = 3, 
+                            offresfraction=0.2,  # first and last x% have (1-x)% of the points
+                            segment_gap=0.3,  # off-res & on-res points have a y% gap
+                            filename_suffix=fname_suffix, verbose = False, wait_time = 3, 
                             segment_option="segmented",
                             # segment_option="linear",
                             # segment_option="homophasal",
@@ -168,17 +215,20 @@ mf.print_text_block(tStart_low, tEnd_low, LPow_num_avgs, LPow_num_pts, LPow_IFBW
 
 
 # %% ultra low power scan
+
 ultra_low_powers = [int(x) for x in ultra_low_powers_floats]
 
-ULPow_num_avgs, ULPow_IFBW_kHz, ULPow_num_pts = 6000, 1.0, 101
+ULPow_num_avgs, ULPow_IFBW_kHz, ULPow_num_pts = 12000, 1.0, 151
 
 tStart_ultra_low = time.time()   
+mf.check_valid_fridge_temp()
 measure_multiple_resonators(fcs, spans, delays, ultra_low_powers,
+                            Navg_init=ULPow_num_avgs,
                             ifbw = ULPow_IFBW_kHz, npts = ULPow_num_pts,  
                             sample_name = sample_name, data_dirs = data_dirs,
-                            Nf = int(ULPow_num_pts*0.8), Navg_init = ULPow_num_avgs,  # Nf = homosphasal fractions
-                            Noffres = int(ULPow_num_pts*0.2),  offresfraction = 0.1, # variables for segmented
-                            filename_suffix="", verbose = False, wait_time = 3, 
+                            offresfraction=0.2,  # first and last x% have (1-x)% of the points
+                            segment_gap=0.3,  # off-res & on-res points have a y% gap
+                            filename_suffix=fname_suffix, verbose = False, wait_time = 3, 
                             segment_option="segmented",
                             # segment_option="linear",
                             # segment_option="homophasal",
