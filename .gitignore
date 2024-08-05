@@ -8,6 +8,10 @@ __pycache__/
 
 .vscode/*
 
+*/best_datasets/*
+
+*DS_Store*
+
 # Distribution / packaging
 .Python
 build/
