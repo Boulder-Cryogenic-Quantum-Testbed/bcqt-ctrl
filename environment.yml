@@ -1,0 +1,25 @@
+name: bcqt-ctrl
+channels:
+  - conda-forge
+dependencies:
+  - ca-certificates
+  - certifi
+  - ipykernel
+  - ipython
+  - matplotlib
+  - numpy
+  - openssl
+  - pandas
+  - pyro4
+  - python=3.12.3
+  - pyvisa
+  - pyvisa-py
+  - scipy
+  - zeroconf
+  - uncertainties
+  - attrs
+  - lmfit
+  - inflect
+  - gitpython
+  - pyqtgraph
+prefix: C:\Users\jlr7\.conda\envs\bcqt-ctrl
