@@ -1,19 +1,17 @@
-# %%
-
 '''
     helper_misc.py
 '''
 
 # print("    loading helper_misc.py")
 
-# %%
 
 import glob, os, sys, time
 
 import regex as re
 import numpy as np
 
-# %%
+from datetime import datetime
+
 
 def check_and_make_dir(directory_name):
     directory_name = directory_name.replace('.csv', '').replace('.pdf', '')  # sanitize input
@@ -178,7 +176,7 @@ def read_temp_JCtrl(jctrl_path=None, print_output=False):
     
     # random values to initialize jctrl that aren't actually used
     Tstart, Tstop, dT, sample_time, T_eps, therm_time = 0.03, 0.315, 0.015, 15, 0.0025, 300
-
+    
     try:
         JCtrl = JanisCtrl(Tstart, Tstop, dT,
                 sample_time=sample_time, T_eps=T_eps,
@@ -186,21 +184,27 @@ def read_temp_JCtrl(jctrl_path=None, print_output=False):
                 init_socket=True, bypass_janis=False,
                 adaptive_averaging=False, output_file=None,
                 data_dir=None)
-        output_cmn = JCtrl.read_cmn()
-        output_ls, tstamp = JCtrl.read_temp('all', False)
+        Z, T, tstamp = JCtrl.read_cmn()
+        output_ls, tstamp_datetime = JCtrl.read_temp('all', False)
+        print(type(Z), type(T), type(tstamp))
+        output_cmn = {"Z" : Z, "T" : T, "tstamp" : tstamp}
+        
     except Exception as e:
         print("Failed to read_temp, error:  ", e)
         return [None], [None], [None]
+    
     finally:
         del JCtrl
         
     if print_output is True:
         print("\nLakeshore:")
-        for k,v in output_ls.items():
+        for k, v in output_ls.items():
             print(f"  {k} = {v[1]:1.3f} K")
             
-        print(f"\nCMN Temp = {output_cmn[1]*1e3:1.2f} mK")
-    
+        print("\nCMN:")
+        for k, v in output_cmn.items():
+            print(f"  {k} = {v} K")
+            
     return output_cmn, output_ls, tstamp
 
 

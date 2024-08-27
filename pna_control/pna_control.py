@@ -117,9 +117,9 @@ def pna_setup(pna, points: int, centerf: float, span: float, ifband_khz: float, 
     #if(averages < 10):
     #    averages = 10
     
-    if(averages <= 1):
-        print(f"Changing averages from {averages} to 3.")
-        averages = 3
+    # if(averages <= 1):
+        # print(f"Changing averages from {averages} to 3.")
+        # averages = 3
 
     # Convert averages to integer
     averages = averages//1

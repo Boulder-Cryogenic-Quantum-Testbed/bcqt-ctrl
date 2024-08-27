@@ -11,7 +11,6 @@ To be run at the beginning of every measurement
 #############################################################################
 
 import sys, os
-import matplotlib.pyplot as plt
 
 print(f"Running setup_vna_measurement.py from {os.getcwd()}...")
 
@@ -31,6 +30,8 @@ sys.path.append(f'{global_scripts_dir}')
 sys.path.append(rf'{global_scripts_dir}\instruments')
 
 import plot_settings
+import matplotlib.pyplot as plt
+import helper_misc as hm
 
 #############################################################################
 ############################### attenuators #################################

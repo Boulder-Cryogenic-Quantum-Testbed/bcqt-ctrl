@@ -1,9 +1,9 @@
 import matplotlib.pyplot as plt
 
 # Define Standard Units
-fontsize = 10
+fontsize = 12
 axlabelsize = 12
-titlesize = 18
+titlesize = 16
 figtitlesize = 24
 legendsize = 12
 

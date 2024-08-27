@@ -1,10 +1,17 @@
 """
 # setup_qick_measurement.py
 
+08/16/24
+
 ### Purpose
 
-To be ran at the top of every script using the following code
+    Initializes qick related instrumentation, specifically the qick board itself, its programmable attenuator,
 
+    e.g. global reference
+        %run E:\GitHub\bcqt-ctrl\setup_qick_board
+        
+    or, if in Cooldown_Data\Cooldown_XX
+        %run ..\..\setup_qick_board
 """
 
 #############################################################################
@@ -12,26 +19,15 @@ To be ran at the top of every script using the following code
 #############################################################################
 
 import sys, os
-import matplotlib.pyplot as plt
 
-print(f"Running setup_qick_measurement.py from {os.getcwd()}...")
+print(f"Running setup_qick_board.py from {os.getcwd()}...")
 
-sys.path.append(r'E:\GitHub\bcqt-ctrl')
-sys.path.append(r'E:\GitHub\bcqt-ctrl\temperature_control')
+print(f"Starting with setup_measurement.py")
+
 sys.path.append(r'E:\GitHub\bcqt-ctrl\resonator_measurements')
-sys.path.append(r'E:\GitHub\bcqt-ctrl\resonator_measurements\helper_scripts')
 
-sys.path.append(r'E:\GitHub\scresonators')
+%run E:\GitHub\bcqt-ctrl\resonator_measurements\setup_measurement
 
-global_scripts_dir = r"E:\Cooldown_Data\Cooldown55\global_scripts"
-print("\n\n#############################################################################")
-print(f"~~~~~ Using {global_scripts_dir} as global script directory source. ~~~~~ ")
-print("#############################################################################\n\n")
-
-sys.path.append(f'{global_scripts_dir}')
-sys.path.append(rf'{global_scripts_dir}\instruments')
-
-import plot_settings
 
 #############################################################################
 ##################### connect to pyro 4 nameserver ##########################
@@ -43,11 +39,11 @@ from qick.pyro import make_proxy
 Pyro4.config.SERIALIZER = "pickle"
 Pyro4.config.PICKLE_PROTOCOL_VERSION=4
 
-ns_host = "192.168.0.99"
+ns_host = "192.168.0.99"  # set by router DHCP
 ns_port = 8888
 proxy_name = "BCQT_QICK"
 
-print(" Connecting to server {}:{} as a client under proxy '{}'...".format(ns_host, ns_port, proxy_name))
+print(f"Connecting to server {ns_host}:{ns_port} as a client under proxy '{proxy_name}'...")
 
 ns = Pyro4.locateNS(host=ns_host, port=ns_port)
 soc, soccfg = make_proxy(ns_host, ns_port, proxy_name)
@@ -57,7 +53,7 @@ try:
     sys.excepthook = Pyro4.util.excepthook
     print("\n*** except hook installed")
 except Exception as e:
-    print("Failed ", e)
+    print("\n*** except hook failed to install... error:\n",e)
 
 
 #############################################################################
@@ -66,25 +62,24 @@ except Exception as e:
 
 # print("Setting up attenuators ")
 
-# sys.path.append("./scripts")
 
-# from MiniCircuits_Attenuator import set_atten, read_atten
-# qb_atten_IP = "192.168.0.118"  
-# ro_atten_IP = "192.168.0.119"
+from MiniCircuits_Attenuator import set_atten, read_atten
+qb_atten_IP = "192.168.0.118"  
+ro_atten_IP = "192.168.0.119"
 
-# try:
-#     set_atten(ro_atten_IP, 0)
-#     read_atten(ro_atten_IP)
-# except Exception as e:
-#     print("Failed to connect to qubit attenuator at {qb_atten_IP=}")
-#     print("Error: \n{e}")
+try:
+    set_atten(ro_atten_IP, 0)
+    read_atten(ro_atten_IP)
+except Exception as e:
+    print("Failed to connect to qubit attenuator at {qb_atten_IP=}")
+    print(f"Error: \n{e}")
 
-# try:
-#     set_atten(qb_atten_IP, 0)
-#     read_atten(qb_atten_IP)
-# except Exception as e:
-#     print("Failed to connect to resonator attenuator at {ro_atten_IP=}")
-#     print("Error: \n{e}")
+try:
+    set_atten(qb_atten_IP, 0)
+    read_atten(qb_atten_IP)
+except Exception as e:
+    print("Failed to connect to resonator attenuator at {ro_atten_IP=}")
+    print(f"Error: \n{e}")
   
 #############################################################################
 ######################## power supply - flux bias ###########################

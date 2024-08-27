@@ -8,10 +8,12 @@ Date:   220728
 """
 
 import pyvisa
-import sys
+import sys, os
 
-# sys.path.append(r'../')  # instrument_control
-# sys.path.append(r'../pna_control/')  
+print(os.getcwd())
+sys.path.append(r'../')  # instrument_control
+sys.path.append(r'../pna_control/')  
+sys.path.append(r'../../pna_control/')  # depends on where this package is loaded...
 
 import pna_control as pna
 import numpy as np
@@ -21,7 +23,7 @@ class AnritsuCtrl(object):
     """
     Class that implements the Anritsu SCPI control
     """
-    def __init__(self, anritsu_addr, vna_addr, 
+    def __init__(self, anritsu_addr=None, vna_addr=None, 
                        rm_backend = None, *args, **kwargs):
         """
         Class constructor
@@ -29,9 +31,25 @@ class AnritsuCtrl(object):
         'rm_backend' = None or '@py', use default pyvisa or use pyvisa-py
         
         """
-        # Default instrument addresses GPIB, TCPIP
-        self.anritsu_addr = anritsu_addr
-        self.vna_addr = vna_addr
+        # define some defaults, using None to check if they were supplied
+        default_anritsu_addr = 'GPIB::7::INSTR'
+        default_vna_addr =  'TCPIP0::192.168.0.113::inst0::INSTR'
+        
+        if anritsu_addr is not None:
+            print(f"Not using default anritsu IP address {default_anritsu_addr}\n   - are you sure this is what you want?")
+            self.anritsu_addr = anritsu_addr
+        else:
+            self.anritsu_addr = default_anritsu_addr
+            print(f"Using default address -> {default_vna_addr}")
+            # Default instrument addresses GPIB, TCPIP
+        
+        if vna_addr is not None:
+            print(f"Not using default VNA IP address {default_vna_addr}\n   - are you sure this is what you want?")
+            self.vna_addr = vna_addr
+        else:
+            self.vna_addr = default_vna_addr
+            print(f"Using default address -> {default_vna_addr}")
+            
 
         # Open the pyvisa resource manager 
         if rm_backend is not None:
@@ -138,6 +156,23 @@ class AnritsuCtrl(object):
         assert not status, f'Error: {description}'
 
         return fmt(ret)
+    
+    def get_instrument_parameters(self):
+        """
+        Sends three queries:
+            (1) is the output on? 
+            (2) what is the freq?
+            (3) what is the amplitude?
+            
+        based on too many measurements made with the TWPA off :)
+        """
+        
+        # Set the power
+        is_output_on = self.read_check('OUTP:STAT?', fmt=int)
+        frequency_setting = self.read_check(f'SOUR:FREQ:CW?', fmt=int) 
+        amplitude_setting = self.read_check(f'SOUR:POW:LEV:IMM:AMPL?', fmt=int)
+        
+        return is_output_on, frequency_setting, amplitude_setting
 
     def frequency_sweep(self, sweep_freqs : list, power : float,
             run_vna : bool = False, vna_dict : dict = None):
@@ -153,6 +188,7 @@ class AnritsuCtrl(object):
         vna_dict        :dict:    parameters to pass to VNA 
 
         """
+        
         # Set the power
         self.write_check(f'SOUR:POW:LEV:IMM:AMPL {power} dBm')
         print(f'Sweeping frequencies {sweep_freqs} GHz at {power} dBm ...')
@@ -228,6 +264,7 @@ class AnritsuCtrl(object):
         vna_dict        :dict:    parameters to pass to VNA 
 
         """
+        
         # Check for the sweep order flag
         if sweep_order == 'power_frequency':
             for power in sweep_powers:
@@ -239,3 +276,4 @@ class AnritsuCtrl(object):
                                  run_vna=run_vna, vna_dict=vna_dict)
         else:
             raise ValueError(f'Sweep order {sweep_order} not recognized.')
+

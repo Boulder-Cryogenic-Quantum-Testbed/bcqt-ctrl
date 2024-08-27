@@ -44,25 +44,26 @@ line_num, sample_name = re.split(r"_", base_dir, maxsplit=1)  # use regex to spl
 print(f"{line_num}_{sample_name}")
 
 # %% to try and get rid of stupid style sheet issue
+%run ../../global_scripts/plot_settings
 plt.subplots(1,1)
 plt.plot()
 plt.show()
 
 # %%
 
-search_dir = 'best_datasets'        # hand picked datasets
+# search_dir = 'best_datasets'        # hand picked datasets
 # search_dir = 'data'                   # all datasets
-# search_dir = r'data\Jul_29_1931'    # specific dataset  
+search_dir = r'data\MQC_anneal_02_6p210GHz'    # specific dataset  
 
 # use list comprehension to grab all glob items
-alL_folders = [x for x in glob.glob(f"{search_dir}\\*GHz")]
+all_folders = [x for x in glob.glob(f"{search_dir}\\*GHz")]
 
 # if looking through all datasets, filter through 
 if search_dir == 'data':
     chosen_timestamp = -1
     all_timestamped_folders = [x for x in glob.glob(f"{search_dir}\\*") if 'all_plots' not in x]
     chosen_folder = all_timestamped_folders[chosen_timestamp]
-    alL_folders = [x for x in glob.glob(f"{chosen_folder}\\*GHz")]
+    all_folders = [x for x in glob.glob(f"{chosen_folder}\\*GHz")]
 
 plot_dir = f"{search_dir}\\all_plots"
 circle_plots_dir = f"{plot_dir}\\circle_plots"
@@ -70,41 +71,51 @@ power_plots_dir = f"{plot_dir}\\power_plots"
 hm.check_and_make_dir(circle_plots_dir)
 hm.check_and_make_dir(power_plots_dir)
 
-
-display(alL_folders)
-
-# %% e just the circle plots and regular data plots
-
+# %% choose resonators to fit
 # chosen_idx = [0, 1, 2, 3, 4, 5, 6, 7]
 # chosen_idx = [-4, -1]
-chosen_idx = range(len(alL_folders))
+chosen_idx = range(len(all_folders))
 
-chosen_resonators = [alL_folders[x] for x in chosen_idx]
+chosen_resonators = [all_folders[x] for x in chosen_idx]
     
+# %% check that all attenuations are the same
+
+for resonator_folder_path in chosen_resonators:
+    all_files = glob.glob(rf"{resonator_folder_path}\*.csv")
+    data_files = [x for x in all_files if sample_name in os.path.basename(x)]
+
+    try:
+        all_atten_strings = [re.search(r"\d{1,2}dB_Atten", os.path.basename(x))[0] for x in data_files]
+        all_attens = [int(re.search(r"\d{1,2}", x)[0]) for x in all_atten_strings]
+    except:
+        all_atten_strings = ["0dB_Atten"]*len(data_files)
+        all_attens = [0]*len(data_files)
+        attenuation = 0
+    # check if all attens are the same
+    
+    if len(set(all_attens)) == 1: 
+        attenuation = all_attens[0]
+    else:
+        assert "mismatched attenuations in directory"
+    
+
+display(all_folders)
+
 for resonator_folder_path in chosen_resonators:
 
     all_datasets, all_dataset_paths = hl.load_files_in_dir(resonator_folder_path, key="*.csv", debug=False)   
 
-    fig, ax = mf.plot_whole_directory(resonator_folder_path, "*\\*.csv", plot_dir=power_plots_dir,
-                                        max_rows=5, verbose=False, plot_min=True, save_plot=False, show_plot=True)
+    # fig, ax = mf.plot_whole_directory(resonator_folder_path, "*\\*.csv", plot_dir=power_plots_dir,
+    #                                     max_rows=5, verbose=False, plot_min=True, save_plot=False, show_plot=True)
         
-    mf.plot_all_circles(resonator_folder_path, "*\\*.csv", plot_dir=circle_plots_dir, 
-                                show_line=False, verbose=False, save_plot=False, show_plot=True)
+    # mf.plot_all_circles(resonator_folder_path, "*\\*.csv", plot_dir=circle_plots_dir, 
+    #                             show_line=False, verbose=False, save_plot=False, show_plot=True)
 
 
-                        
+
  # %%  individual folder loss tan fit 
 
 mf.clean_directory_of_qiqcfc_pngs(directory=search_dir, dry_run=False)
-
-# perform_loss_tan_fit = False
-perform_loss_tan_fit = True
- 
-chosen_idx = list(range(len(alL_folders)))  # use all folders
-# chosen_idx = [0, 1, 3, 4, 5, 6]
-# chosen_idx = [0]
-chosen_resonators = [alL_folders[x] for x in chosen_idx]
-
 
 for resonator_folder_path in chosen_resonators:
     
@@ -127,14 +138,14 @@ for resonator_folder_path in chosen_resonators:
     
     try:
         hf.power_sweep_fit_drv(sample_name=sample_name,
-                            atten=[-10, -70], temperature=temperature,
+                            atten=[-attenuation, -70], temperature=temperature,
                             powers_in=powers_in, all_paths=all_paths, 
                             use_error_bars=True, temp_correction='', phi0=0.,
                             use_gauss_filt=False, use_matched_filt=False,
                             use_elliptic_filt=False, use_mov_avg_filt=False,
                             loss_scale=1e-6, preprocess_method='linear',
                             ds = {'QHP' : 1e5, 'nc' : 1e1, 'Fdtls' : 1e-6},
-                            plot_twinx=False, plot_fit=perform_loss_tan_fit, QHP_fix=True, show_plots=True,
+                            plot_twinx=False, plot_fit=True, QHP_fix=True, show_plots=True,
                             data_dir=resonator_folder_path, save_dcm_plot=True, manual_init_list=init_conds,
                             save_fit_dirs=save_fit_dirs, show_dbm=True)
         plt.show()
@@ -152,7 +163,7 @@ for resonator_folder_path in chosen_resonators:
         
         print("Re-attempting without performing a loss tan fit...")
         hf.power_sweep_fit_drv(sample_name=sample_name,
-                            atten=[0, -70], temperature=temperature,
+                            atten=[-attenuation, -70], temperature=temperature,
                             powers_in=powers_in, all_paths=all_paths, 
                             use_error_bars=True, temp_correction='', phi0=0.,
                             use_gauss_filt=False, use_matched_filt=False,

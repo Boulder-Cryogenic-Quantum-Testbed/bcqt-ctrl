@@ -429,6 +429,7 @@ def power_sweep_fit_drv(atten=[0, -60], sample_name=None,
     fc_err = df['fc error']
 
     # Add attenuation to powers
+    atten = -np.abs(atten)  # make sure that attenuation is negative
     powers += sum(atten)
 
     def pdBm_to_navg_ticks(p):

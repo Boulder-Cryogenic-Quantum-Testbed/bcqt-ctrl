@@ -28,19 +28,19 @@ Example:
 import socket
 import simple_pid
 import time
-import datetime
 import subprocess
 from multiprocessing import Process, Manager
 import glob
 import numpy as np
 import errno
+from datetime import datetime
 
 import sys
 # sys.path.append(r'E:\GitHub\bcqt-ctrl')
 # sys.path.append(r'E:\GitHub\bcqt-ctrl\temperature_control')
 # sys.path.append(r'E:\GitHub\bcqt-ctrl\instrument_control')
 sys.path.append(r'E:\GitHub\bcqt-ctrl\pna_control')
-import pna_control.pna_control as PNA
+import pna_control as PNA
 import os
 
 
@@ -57,7 +57,6 @@ class JanisCtrl(object):
         # self.TCP_IP = '192.168.0.111'  # probably wont work without some port forwarding
         self.TCP_PORT = 5559
         self.init_socket = True
-        
         
         # Set the default VNA address
         # self.vna_addr = 'TCPIP0::K-N5222B-21927::hislip0,4880::INSTR'
@@ -79,7 +78,7 @@ class JanisCtrl(object):
 
         # Set the base temperature of the fridge here
         self.T_base = 0.011
-        self.dstr = datetime.datetime.today().strftime('%y%m%d')
+        self.dstr = datetime.today().strftime('%y%m%d')
 
         # Dictionary with the channels on the Lakeshore
         self.channel_dict = {'50K'     : 1, '10K'    : 2, '3K'  : 3,
@@ -131,7 +130,7 @@ class JanisCtrl(object):
         Deconstructor to free resources
         """
         # Set the current to zero and close the socket connection
-        print('Calling destructor ...')
+        if self.verbose: print('Calling destructor ...')
         self.close_socket()
 
     def close_socket(self):
@@ -198,9 +197,12 @@ class JanisCtrl(object):
             return -1, -1, -1.
         self.tcp_send('readCMNTemp(9)')
         data = self.tcp_recv()
+        # print(data)
         err = False
         try:
             Z, T, tstamp, status = data.split(',')
+            tstamp_parsed = datetime.strptime(tstamp, r"%H:%M:%S.%f %p %m/%d/%Y")
+            tstamp_formatted = tstamp_parsed.strftime(r"[%m/%d/%y] %I:%M:%S %p ")
         except Exception as e:
             print(f'{e}\ndata: {data}')
             err = True
@@ -218,7 +220,7 @@ class JanisCtrl(object):
             tstamp = tstamp[0].split('.')[0]
 
         if not status:
-            return Z, T, tstamp
+            return {"Z" : Z, "T" : T, "Timestamp" : tstamp_formatted}
         else:
             print(f'tcp_send(readCMNTemp(9)) failed with status: {status}')
             return None, None, None
@@ -238,12 +240,14 @@ class JanisCtrl(object):
                 Z, T, tstamp, status = data.split(',')
                 tstamp = tstamp.split(' ')
                 tstamp = tstamp[0].split('.')[0]
+                tstamp_datetime = datetime.strptime(tstamp, "%H:%M:%S")
+                
                 Z = float(Z) 
                 T = float(T) 
                 if print_output is True:
                     print(f'{tstamp}, {key}: {T:.4g} K')
                 temp_dict[key] = (Z, T)
-            return temp_dict, tstamp
+            return temp_dict, tstamp_datetime
         
         else:
             channel = self.channel_dict[channel_name]
@@ -943,7 +947,7 @@ def multiple_resonator_driver(Jctrl : JanisCtrl):
             start_powers, end_powers, num_powers, sample_name,
             avgs, pts=1001, sparam='S21')
 
-def compute_segments_segmented(fc, span, fscale, Npts, offresfraction=0.1, segment_gap=0.1):
+def compute_segments_segmented(fc, span, fscale, Npts, offresfraction=0.1):
     """
         Computes segments needed to do segmented... in a sane way...
         
@@ -955,7 +959,7 @@ def compute_segments_segmented(fc, span, fscale, Npts, offresfraction=0.1, segme
         on resonance, i.e. between f_a and f_b. So this means, for a given
         Npts, the proportion of pts for the middle segment is 1-offresfrac/2, 
         and the proportion of pts for the outer segments is offresfrac/2. 
-        e.g. for offresfrac = 0.2, the outer segments have Npts*0.1, and the
+        e.g. for offresfrac = 0.2, the two outer segments have Npts*0.1, and the
         middle segment has Npts*0.8
         
     """
@@ -963,27 +967,30 @@ def compute_segments_segmented(fc, span, fscale, Npts, offresfraction=0.1, segme
     # Compute the frequencies
     fstart = fc - span / 2
     fstop  = fc + span / 2
-    fa = fstart + (offresfraction * span)
-    fb = fstop  - (offresfraction * span)
-    gap = span * segment_gap
+    fa = fstart + (offresfraction/2 * span)  # starting from fstart, fa is (x/2)% away.
+    fb = fstop  - (offresfraction/2 * span)  #   e.g. for 20%, the % dist is 10/80/10
     
-    Npts_offres = int(Npts * offresfraction/2)
-    Npts_onres = int(Npts * (1 - offresfraction/2))
+    Npts_offres = int(Npts * offresfraction/2)  # two segments, so factor of 2
+    Npts_onres = int(Npts * (1 - offresfraction))  # no factor of two!
     
-    # print(f"{fa=}\n{fb=}\n{gap=}\n{span=}\n{segment_gap=}")
+    print(f"{fstart-fc=}\n{fstop-fc=}\n{fa-fc=}\n{fb-fc=}\n{fscale=}\n{(fa-fstart)=}\n{(fstop - fb)=}\n{span=}\n{Npts_offres=}\n{Npts_onres=}")
     
       # format: [ ,?,  npts of seg,   f_start of seg,  f_stop of seg ]
-    segments = [f',1, {Npts_offres}, {fstart*fscale},   {(fa-gap/2)*fscale}',
-                f',1, {Npts_onres} , {(fa+gap/2)*fscale}, {(fb-gap/2)*fscale}',
-                f',1, {Npts_offres}, {(fb+gap/2)*fscale},     {fstop*fscale}']
-    # why is that ,1, there!?!?!?!?! I thought it was related to the VNA... but it isn't
-        
+    segments = [f',1, {Npts_offres},    {fstart*fscale},   {fa*fscale}',
+                f',1, {Npts_onres} ,    {fa*fscale},       {fb*fscale}',
+                f',1, {Npts_offres},    {fb*fscale},       {fstop*fscale}']
+    
     # segments shouldnt have spaces, but it looks pretty with them :)
     segments = [s.replace(" ", "") for s in segments]  # sanitize any spaces for each string
     
+    print(f"{Npts_offres=}, {(fstart-fstart)*fscale=}, {(fa-fstart)*fscale=}")
+    print(f"{Npts_onres=}, {(fa-fstart)*fscale=}, {(fb-fa)*fscale=}'")
+    print(f"{Npts_offres=}, {(fb-fstart)*fscale=}, {(fstop-fstart)*fscale=}")
+        
+    
     return segments
 
-def compute_segments(fc, span, p, pc, beta, fscale, Noffres, offresfraction, Npts, Nf=None,
+def compute_segments(fc, span, p, pc, beta, fscale, Noffres, offresfraction, Nf=None,
         option='hybrid'):
     """
     Computes segments needed to perform homophasal measurements
@@ -991,7 +998,7 @@ def compute_segments(fc, span, p, pc, beta, fscale, Noffres, offresfraction, Npt
     """
     # Estimate the number of linewidths per sweep
     power_fac = 1. # 0.5 * (np.tanh((4 / beta) * (p - pc) / pc) + 1)
-    # print(f'power_fac: {power_fac}')
+    print(f'power_fac: {power_fac}')
     Q = 20 * (fc / span) * power_fac
 
     # Compute the frequencies
@@ -999,23 +1006,21 @@ def compute_segments(fc, span, p, pc, beta, fscale, Noffres, offresfraction, Npt
     fstop  = fc + span / 2
     fa = fstart + offresfraction * span / 2
     fb = fstop  - offresfraction * span / 2
-    
     if option == 'homophasal':
         theta0 = np.pi / 32
-        if Nf is None:  Nf = 30
+        Nf = 30 if Nf is None else Nf
         theta = np.linspace(-np.pi + theta0, (np.pi - theta0), Nf + 2)
         freq = fc * (1 - 0.5 * np.tan(theta / 2) / Q)
-        segments = [f', 1, 2, {ff1*fscale}, {ff2*fscale}'
+        segments = [f',1,2,{ff1*fscale},{ff2*fscale}'
                 for ff1, ff2 in zip(freq[0::2], freq[1::2])]
-        
     elif option == 'hybrid':
         theta0 = np.pi / 32
-        if Nf is None:  Nf = 20
+        Nf = 20 if Nf is None else Nf
         theta = np.linspace(-np.pi + theta0, (np.pi - theta0), Nf + 2)
         freq = fc * (1 - 0.5 * np.tan(theta / 2) / Q)
 
         np.set_printoptions(precision=4)
-        
+
         # Homophasal, near resonance
         hsegments = [f',1,2,{ff1*fscale},{ff2*fscale}'
                 for ff1, ff2 in zip(freq[0::2], freq[1::2])][1:-1]
@@ -1025,28 +1030,19 @@ def compute_segments(fc, span, p, pc, beta, fscale, Noffres, offresfraction, Npt
         segments = [f',1,{Noffres},{fstop*fscale}, {fbp}',
                     *hsegments,
                     f',1,{Noffres},{fap},{fstart*fscale}']
-        
-    elif option == 'segmented':  
-        print("Using compute_segments instead of compute_segments_segmented for segmented...!")
-        segments = [f',1,{Noffres},{fstart*fscale} ,{fa*fscale}',
-                    f',1,{Noffres * (1 - 2*offresfraction)}, {fa*fscale}, {fb*fscale}',
-                    f',1,{Noffres} ,{fb*fscale}, {fstop*fscale}']
-        
-    elif option == 'linear':
-        segments = [f', 1, {5*Noffres}, {fstart * fscale}, {fstop * fscale}']
-        
     else:
-        print(f"Error, incorrect option supplied: {option}. \nOnly 'homophasal', 'hybrid', 'segmented', and 'linear' allowed. ")
-        raise Exception
+        segments = [f',1,5,{fstart*fscale},{fa*fscale}',
+                    f',1,41,{fa*fscale},{fb*fscale}',
+                    f',1,5,{fb*fscale},{fstop*fscale}']
 
-    segments = [s.replace(" ", "") for s in segments]  # sanitize any spaces
     return segments
+
 
 def measure_multiple_resonators(fcs, spans, delays, powers,
                                 ifbw=None, sparam='S21', npts=None,
                                 adaptive_averaging=False, sample_name='',
                                 runtime=1., cal_set=None, start_delay=0.,
-                                offresfraction=0.45, segment_gap=0.1, is_segmented=True, filename_suffix="homophasal",
+                                offresfraction=0.45, is_segmented=False, filename_suffix="",
                                 segment_option="homophasal", Navg_init=None, Noffres=5, Nf=None,
                                 pc=-75., beta=0.2, bypass_janis=False, file_names=None, 
                                 data_dirs=None, verbose=False, Jctrl_dict=None, wait_time = 0,):
@@ -1060,6 +1056,11 @@ def measure_multiple_resonators(fcs, spans, delays, powers,
     Tstart = 0.03; Tstop = 0.315; dT = 0.015
     sample_time = 15; T_eps = 0.0025 # -- 255 mK and up
     therm_time  = 300. # wait an extra 5 minutes to thermalize
+    
+    if type(powers) is int:
+        print(f"Input power array is integer instead of list: recasting! {powers}")
+        powers = [powers]
+    
     if len(powers) < 2:
         p1 = powers[0]
         p2 = powers[0]
@@ -1154,9 +1155,9 @@ def measure_multiple_resonators(fcs, spans, delays, powers,
             fa = fstart + offresfraction * span / 2
             fb = fstop  - offresfraction * span / 2
 
-            # bandaid fix to this awful section of the code
-            if segment_option == "segmented":
-                segments = compute_segments_segmented(fc, span, fscale, npts, offresfraction, segment_gap)
+            # bandaid fix to this section of the code
+            if segment_option == "segmented_alt":
+                segments = compute_segments_segmented(fc, span, fscale, npts, offresfraction)
             else:
                 # segments = compute_homophasal_segments()
                 p = p1
@@ -1237,8 +1238,6 @@ def measure_multiple_resonators(fcs, spans, delays, powers,
             time.sleep(start_delay * h2s)
         out = {}
         
-        for s in segments:
-            print(s)
             
         Jctrl.pna_process('meas', T, out, prefix=sample_name,
                           adaptive_averaging=adaptive_averaging,

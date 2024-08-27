@@ -7,8 +7,6 @@ contains several useful functions to keep our notebooks short
 
 """
 
-# TODO: merge with helper_scripts
-
 import numpy as np
 import pandas as pd
 import os, sys, time, math, shutil

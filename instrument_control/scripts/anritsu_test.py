@@ -9,9 +9,11 @@ Date:   220728
 """
 
 import sys
-# sys.path.append(r'C:\Users\Lehnert Lab\GitHub\measurement\instrument_control')
-# Need to test relative path, otherwise try the above
-sys.path.append(r'../')
+# sys.path.append(r'./')  # this file is in bcqt-ctrl\instrument_control\scripts
+sys.path.append(r'../')  # this file is in bcqt-ctrl\instrument_control\scripts
+# sys.path.append(r'../pna_control/')  # need this to use VNA
+# sys.path.append(r'../../resonator_measurements/helper_scripts')  # for temperature reading
+
 from anritsu import AnritsuCtrl
 import numpy as np
 import sys
@@ -53,6 +55,11 @@ def test_frequency_sweep():
     power = -35.
     anritsu.frequency_sweep(sweep_freqs, power,
            run_vna=False, vna_dict=None)
+    return True
+
+def test_get_instrument_parameters():
+    anritsu = AnritsuCtrl()
+    is_output_on, frequency_setting, amplitude_setting = anritsu.get_instrument_parameters()
     return True
 
 def test_power_sweep_with_vna():
@@ -137,8 +144,17 @@ def run_tests(tests):
     
 
 if __name__ == '__main__':
-    tests = ['test_instantiate_class',
-             # 'test_power_sweep_with_vna',
-             # 'test_frequency_sweep_with_vna',
-             'test_frequency_power_sweep_with_vna']
+    tests = [
+        # 'test_instantiate_class',
+        'test_get_instrument_parameters',
+        # 'test_power_sweep',
+        # 'test_frequency_sweep',
+        # 'test_power_sweep_with_vna',
+        # 'test_frequency_sweep_with_vna',
+        # 'test_frequency_power_sweep_with_vna'
+    ]
     run_tests(tests)
+    
+    test_anritsu = AnritsuCtrl()
+    
+    display(test_anritsu.get_instrument_parameters())
