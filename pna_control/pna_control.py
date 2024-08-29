@@ -175,10 +175,14 @@ def read_data(pna, points, sample_id, power, temp, centerf,
     if output_filepath is None:
         output_filepath = timestamp_folder(os.getcwd() + '\\', centerf, sample_id)
         
+    # TODO: change to suffix instead of filename? will affect resonator code
     if output_filename == None or output_filename == '':
-        if verbose:  print(f"{output_filename=}, using name_datafile")
+        if verbose:  print(f"{output_filename=}, using name_datafile()")
         output_filename = name_datafile(power, temp, cfreq, sample_id, filename_suffix)
-        
+    
+    if output_filename[-4:] != ".csv":
+        output_filename += ".csv"
+    
     print(f'      File Directory: {output_filepath}')
     print(f"      Filename: {output_filename}")
     if not os.path.exists(output_filepath):
@@ -197,7 +201,6 @@ def read_data(pna, points, sample_id, power, temp, centerf,
 def get_data(centerf: float, 
              span: float, 
              temp: float, 
-             output_filename: str = None,
              averages: int = 100, 
              power: float = -30, 
              edelay: float = 76, 
@@ -212,6 +215,7 @@ def get_data(centerf: float,
              segments : list = None,
              filename_suffix : str = None,
              data_dir : str = '.\\',
+             output_filename: str = None,
              verbose : bool = False):
     '''
     function to get data and put it into a user specified file
@@ -289,12 +293,15 @@ def get_data(centerf: float,
               sample_id, power, 
               temp, centerf, 
               output_filename=output_filename,
-              segments=segments, output_filepath=data_dir, 
-              filename_suffix=filename_suffix, verbose=verbose)
+              output_filepath=data_dir, 
+              segments=segments, 
+              filename_suffix=filename_suffix, 
+              verbose=verbose)
 
+    # TODO: necessary???
     if verbose:  print("  Finished reading, shutting off output.")
     keysight.write('SYSTem:CHANnels:RESume')
-    keysight.write('OUTPut:STATe OFF')
+    # keysight.write('OUTPut:STATe OFF')
 
 def power_sweep(startpower: float, 
                 endpower: float, 

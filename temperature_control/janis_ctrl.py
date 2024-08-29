@@ -197,7 +197,7 @@ class JanisCtrl(object):
             return -1, -1, -1.
         self.tcp_send('readCMNTemp(9)')
         data = self.tcp_recv()
-        # print(data)
+        
         err = False
         try:
             Z, T, tstamp, status = data.split(',')
@@ -207,19 +207,19 @@ class JanisCtrl(object):
             print(f'{e}\ndata: {data}')
             err = True
             
+        
         # Additional error checking
-        if err:
-            Z = None
-            T = None
-            status = 1
-        else:
-            Z = float(Z)
-            T = float(T)
-            status = int(status)
-            tstamp = tstamp.split(' ')
-            tstamp = tstamp[0].split('.')[0]
+        # if err:
+        #     Z = None
+        #     T = None
+        #     status = 1
+        # else:
+        #     T = float(T)
+        #     status = int(status)
+        #     tstamp = tstamp.split(' ')
+        #     tstamp = tstamp[0].split('.')[0]
 
-        if not status:
+        if status:
             return {"Z" : Z, "T" : T, "Timestamp" : tstamp_formatted}
         else:
             print(f'tcp_send(readCMNTemp(9)) failed with status: {status}')

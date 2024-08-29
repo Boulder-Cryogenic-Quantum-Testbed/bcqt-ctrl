@@ -31,7 +31,7 @@ def get_power_from_filename(filename):
     # that starts with a '-', has 1-3 digits, and ends with dB
     power_reg = re.search("[0-9]{1,3}dB", filename)
     power_dB = power_reg.captures()[0]  # there should only be one match
-    power = int(power_dB[:-2]) # strip off the 'dB', add the negative sign
+    power = float(power_dB[:-2]) # strip off the 'dB', add the negative sign
     return power*-1
 
 
@@ -177,17 +177,19 @@ def read_temp_JCtrl(jctrl_path=None, print_output=False):
     # random values to initialize jctrl that aren't actually used
     Tstart, Tstop, dT, sample_time, T_eps, therm_time = 0.03, 0.315, 0.015, 15, 0.0025, 300
     
+    JCtrl = JanisCtrl(Tstart, Tstop, dT,
+            sample_time=sample_time, T_eps=T_eps,
+            therm_time=therm_time, Nf=32,
+            init_socket=True, bypass_janis=False,
+            adaptive_averaging=False, output_file=None,
+            data_dir=None)
+    
     try:
-        JCtrl = JanisCtrl(Tstart, Tstop, dT,
-                sample_time=sample_time, T_eps=T_eps,
-                therm_time=therm_time, Nf=32,
-                init_socket=True, bypass_janis=False,
-                adaptive_averaging=False, output_file=None,
-                data_dir=None)
-        Z, T, tstamp = JCtrl.read_cmn()
+        Z, T, tstamp = JCtrl.read_cmn().values()
         output_ls, tstamp_datetime = JCtrl.read_temp('all', False)
-        print(type(Z), type(T), type(tstamp))
         output_cmn = {"Z" : Z, "T" : T, "tstamp" : tstamp}
+        
+        # print(type(Z), type(T), type(tstamp))
         
     except Exception as e:
         print("Failed to read_temp, error:  ", e)
@@ -199,12 +201,13 @@ def read_temp_JCtrl(jctrl_path=None, print_output=False):
     if print_output is True:
         print("\nLakeshore:")
         for k, v in output_ls.items():
-            print(f"  {k} = {v[1]:1.3f} K")
+            print(f"  {k} = {v[1]:1.3f}")
             
         print("\nCMN:")
         for k, v in output_cmn.items():
-            print(f"  {k} = {v} K")
-            
+            print(f"  {k} = {v}")
+        
+    print("\n")
     return output_cmn, output_ls, tstamp
 
 
