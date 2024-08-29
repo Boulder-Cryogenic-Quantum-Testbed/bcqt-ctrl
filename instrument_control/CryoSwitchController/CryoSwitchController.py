@@ -4,7 +4,7 @@ from libphox import Labphox
 import numpy as np
 import json
 import os
-
+from pathlib import Path
 
 ####
 #### changed IP from default 192.168.1.101
@@ -33,26 +33,26 @@ class Cryoswitch:
         self.tolerance = 0.15
 
         if override_abspath:
-            self.abs_path = override_abspath + '\\'
+            self.abs_path = Path( override_abspath + '\\' )
         else:
-            self.abs_path = os.path.dirname(__file__) + '\\'
+            self.abs_path = Path( os.path.dirname(__file__) + '\\') 
 
         self.decimals = 2
         self.plot = True
         self.log_wav = True
-        self.log_wav_dir = self.abs_path + r'data'
+        self.log_wav_dir = self.abs_path / 'data'
         self.align_edges = True
         self.plot_polarization = True
 
         self.pulse_logging = True
-        self.pulse_logging_filename = self.abs_path + r'pulse_logging.txt'
+        self.pulse_logging_filename = self.abs_path / 'pulse_logging.txt'
         self.log_pulses_to_display = 5
         self.warning_threshold_current = 60
 
         self.track_states = True
-        self.track_states_file = self.abs_path + r'states.json'
+        self.track_states_file = self.abs_path / 'states.json'
 
-        self.constants_file_name = self.abs_path + r'constants.json'
+        self.constants_file_name = self.abs_path / 'constants.json'
         self.__constants()
 
         if self.track_states:

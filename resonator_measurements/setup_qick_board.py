@@ -62,25 +62,6 @@ except Exception as e:
 
 # print("Setting up attenuators ")
 
-
-from MiniCircuits_Attenuator import set_atten, read_atten
-qb_atten_IP = "192.168.0.118"  
-ro_atten_IP = "192.168.0.119"
-
-try:
-    set_atten(ro_atten_IP, 0)
-    read_atten(ro_atten_IP)
-except Exception as e:
-    print("Failed to connect to qubit attenuator at {qb_atten_IP=}")
-    print(f"Error: \n{e}")
-
-try:
-    set_atten(qb_atten_IP, 0)
-    read_atten(qb_atten_IP)
-except Exception as e:
-    print("Failed to connect to resonator attenuator at {ro_atten_IP=}")
-    print(f"Error: \n{e}")
-  
 #############################################################################
 ######################## power supply - flux bias ###########################
 #############################################################################

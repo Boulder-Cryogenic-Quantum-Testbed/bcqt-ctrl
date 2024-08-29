@@ -15,7 +15,7 @@ import regex as re
 import numpy as np
 
 # %%
-def load_many_csvs_as_dataframes(search_dir, search_str="\\*.csv", column_headers=["Freq","Magn","Phase"], debug=False):
+def load_many_csvs_as_dataframes(search_dir, search_str="/*.csv", column_headers=["Freq","Magn","Phase"], debug=False):
     data_dict = {}
     for item in glob.glob(search_dir + search_str):
         if debug: print("    ",  item_name)
@@ -51,8 +51,8 @@ def gen_dataframe_from_csv(filepath, **kwargs):
 
 
 def load_files_in_dir(directory, key="*", blacklist='', debug=False):
-    if directory[-1] != "\\":  #??? 
-        directory = directory + "\\"
+    if directory[-1] != "/":  #??? 
+        directory = directory + "/"
         
     if debug: 
         print(f"     directory + key = {directory + key}")
@@ -60,8 +60,8 @@ def load_files_in_dir(directory, key="*", blacklist='', debug=False):
         for val in glob.glob(directory + key): 
             print(val)
     
-    filepaths = [fname for fname in glob.glob(directory + key) if blacklist not in fname]
-    filenames = [os.path.basename(x) for x in glob.glob(directory + key) if blacklist not in x]
+    filepaths = sorted([fname for fname in glob.glob(directory + key) if blacklist not in fname])
+    filenames = sorted([os.path.basename(x) for x in glob.glob(directory + key) if blacklist not in x])
     
     if len(filepaths) == 0 or len(filenames) == 0:
         print("No files found. Check that the directory, key, and that the") 

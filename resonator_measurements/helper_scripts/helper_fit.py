@@ -1,4 +1,3 @@
-# %%
 
 '''
     helper_fit.py
@@ -6,7 +5,6 @@
 
 # print("    loading helper_fit.py")
 
-# %% 
 
 import glob, os, sys, time
 import datetime, regex
@@ -21,20 +19,18 @@ import fit_resonator.resonator as res
 import fit_resonator.fit as fsd
 import helper_misc as hm
 
-# %%
-
 def fit_single_res(filename, filter_points=[0,0], preprocess_method='linear',
                    use_gauss_filt=False, use_matched_filt=False,
                    use_elliptic_filt=False, use_mov_avg_filt=False,
                    fname_ref=None, data_dir=None, save_dcm_plot=False,
-                   save_fit_dirs=r"fits\\", manual_init=None):
+                   save_fit_dirs=r"fits/", manual_init=None):
     """
     Fit a single resonator from file
     """
     # Current directory for the data under inspection
     if data_dir is None:
         my_dir = os.getcwd() 
-        fname = my_dir + '\\' + filename
+        fname = my_dir + '/' + filename
     else:
         fname = filename
         
@@ -98,7 +94,7 @@ def fit_qiqcfc_vs_power(filenames, powers, filter_points=None,
                         use_elliptic_filt=False, filt_idxs=None,
                         use_mov_avg_filt=False, fname_ref=None,
                         data_dir='', show_plots=False, save_dcm_plot=False,
-                        save_fit_dirs=r"fits\\", manual_init_list=None):
+                        save_fit_dirs=r"fits/", manual_init_list=None):
     """
     Fits multiple resonances at different powers for a given power
     """
@@ -169,11 +165,11 @@ def fit_qiqcfc_vs_power(filenames, powers, filter_points=None,
     
     folder_dir = os.path.basename(os.path.dirname(filename))
     filename_csv = f'qiqcfc_vs_power_{dstr}.csv'
-    report_folder = f"reports\\{folder_dir}"
+    report_folder = f"reports/{folder_dir}"
     hm.check_and_make_dir(report_folder)
     
-    df.to_csv(f"{data_dir}\\{filename_csv}")  # save in data directory
-    df.to_csv(f"{report_folder}\\{filename_csv}")  # and in reports directory
+    df.to_csv(f"{data_dir}/{filename_csv}")  # save in data directory
+    df.to_csv(f"{report_folder}/{filename_csv}")  # and in reports directory
 
     return df
 
@@ -371,7 +367,7 @@ def power_sweep_fit_drv(atten=[0, -60], sample_name=None,
                         preprocess_method='linear', show_dbm=False,
                         ds = {'QHP' : 1e4, 'nc' : 1e6, 'Fdtls' : 1e-6}, data_dir=None,
                         plot_twinx=True, plot_fit=False, QHP_fix=False, show_plots=False,
-                        save_dcm_plot=False, save_fit_dirs="fits\\", manual_init_list=None):
+                        save_dcm_plot=False, save_fit_dirs="fits/", manual_init_list=None):
     """
     Driver for fitting the power sweep data for a given set of data
     """
@@ -429,7 +425,6 @@ def power_sweep_fit_drv(atten=[0, -60], sample_name=None,
     fc_err = df['fc error']
 
     # Add attenuation to powers
-    atten = -np.abs(atten)  # make sure that attenuation is negative
     powers += sum(atten)
 
     def pdBm_to_navg_ticks(p):
@@ -660,23 +655,23 @@ def power_sweep_fit_drv(atten=[0, -60], sample_name=None,
         if data_dir is None:
             fprefix = sample_name + '_' if sample_name else ''  # saved in script directory
         else:
-            fprefix = data_dir + "\\all_fit_plots\\"
-            hm.check_and_make_dir(fprefix)  # save a copy in data_dir under "<sample_name_freq>\\fits"
+            fprefix = data_dir + "/all_fit_plots/"
+            hm.check_and_make_dir(fprefix)  # save a copy in data_dir under "<sample_name_freq>/fits"
             
-            fprefix_2 = f"reports\\{sample_name}_{fc_str}GHz\\"
-            hm.check_and_make_dir(fprefix_2)  # save a copy in main directory under "fit_reports\\<sample_name_freq>\\"
+            fprefix_2 = f"reports/{sample_name}_{fc_str}GHz/"
+            hm.check_and_make_dir(fprefix_2)  # save a copy in main directory under "fit_reports/<sample_name_freq>/"
         
-        fig_fc.savefig(f"{fprefix}\\{fig_fc_title}", format='png')
-        fig_qc.savefig(f"{fprefix}\\{fig_qc_title}", format='png')
-        fig_qiqc.savefig(f"{fprefix}\\{fig_qiqc_title}", format='png')
-        fig_qi.savefig(f"{fprefix}\\{fig_qi_title}", format='png')
-        fig_d.savefig(f"{fprefix}\\{fig_d_title}", format='png')
+        fig_fc.savefig(f"{fprefix}/{fig_fc_title}", format='png')
+        fig_qc.savefig(f"{fprefix}/{fig_qc_title}", format='png')
+        fig_qiqc.savefig(f"{fprefix}/{fig_qiqc_title}", format='png')
+        fig_qi.savefig(f"{fprefix}/{fig_qi_title}", format='png')
+        fig_d.savefig(f"{fprefix}/{fig_d_title}", format='png')
             
-        fig_fc.savefig(f"{fprefix_2}\\{fig_fc_title}", format='png')
-        fig_qc.savefig(f"{fprefix_2}\\{fig_qc_title}", format='png')
-        fig_qiqc.savefig(f"{fprefix_2}\\{fig_qiqc_title}", format='png')
-        fig_qi.savefig(f"{fprefix_2}\\{fig_qi_title}", format='png')
-        fig_d.savefig(f"{fprefix_2}\\{fig_d_title}", format='png')
+        fig_fc.savefig(f"{fprefix_2}/{fig_fc_title}", format='png')
+        fig_qc.savefig(f"{fprefix_2}/{fig_qc_title}", format='png')
+        fig_qiqc.savefig(f"{fprefix_2}/{fig_qiqc_title}", format='png')
+        fig_qi.savefig(f"{fprefix_2}/{fig_qi_title}", format='png')
+        fig_d.savefig(f"{fprefix_2}/{fig_d_title}", format='png')
     
     if show_plots is False:
         plt.close('all')

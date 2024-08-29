@@ -14,16 +14,16 @@ print("Make sure you login to the JetWay session on PuTTY with user: 'bco' and p
 print("Running __init__.py for helper_scripts!'")
 
 # %% 
-path_to_bcqt_ctrl = r'E:\GitHub\bcqt-ctrl'
-path_to_resfit = r'E:\Github\scresonators'
+path_to_bcqt_ctrl = r"/Users/jlr7/Library/CloudStorage/OneDrive-UCB-O365/GitHub/"
+path_to_resfit = r"/Users/jlr7/Library/CloudStorage/OneDrive-UCB-O365/GitHub/"
 path_to_parent = os.path.dirname(os.path.abspath(__file__))
 path_to_parent_parent = os.path.dirname(path_to_parent)
 
 # %%
 
-item_list = [os.path.basename(item) for item in glob.glob(path_to_parent_parent + "\\*")]
+item_list = [os.path.basename(item) for item in glob.glob(path_to_parent_parent + "/*")]
 
-assert 'helper_scripts' in item_list, f"helper_scripts' folder not found! {path_to_parent_parent}"
+assert 'helper_scripts' in item_list, f"helper_scripts' folder not found! Looked in: {path_to_parent_parent}"
 assert len(glob.glob(path_to_resfit)), f'Path: {path_to_resfit} does not exist'
 assert len(glob.glob(path_to_parent)), f'Path: {path_to_parent} does not exist'
 sys.path.append(path_to_resfit)
