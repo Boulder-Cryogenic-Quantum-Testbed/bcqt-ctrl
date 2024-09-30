@@ -32,19 +32,23 @@ class AnritsuCtrl(object):
         'rm_backend' = None or '@py', use default pyvisa or use pyvisa-py
         
         """
+        
         # define some defaults, using None to check if they were supplied
         default_anritsu_addr = 'GPIB::7::INSTR'
-        default_vna_addr =  'TCPIP0::192.168.0.113::inst0::INSTR'
+        default_vna_addr =  'TCPIP0::K-N5231B-57006.local::inst0::INSTR'
         
-        if anritsu_addr is not None:
-            print(f"Not using default anritsu IP address {default_anritsu_addr}\n   - are you sure this is what you want?")
+        anritsu_addr = default_anritsu_addr if anritsu_addr is None else anritsu_addr
+        vna_addr = default_vna_addr if vna_addr is None else vna_addr
+        
+        if anritsu_addr != default_anritsu_addr:
+            print(f"Not using default anritsu IP address {default_anritsu_addr}\n   - Instead using {anritsu_addr}")
             self.anritsu_addr = anritsu_addr
         else:
             self.anritsu_addr = default_anritsu_addr
             print(f"Using default address for Anritsu -> {default_anritsu_addr}")
             # Default instrument addresses GPIB, TCPIP
         
-        if vna_addr is not None:
+        if vna_addr != default_vna_addr:
             print(f"Not using default VNA IP address {default_vna_addr}\n   - are you sure this is what you want?")
             self.vna_addr = vna_addr
         else:
@@ -74,6 +78,11 @@ class AnritsuCtrl(object):
 
         # Open the Anritsu instrument object
         self.resource = self.rm.open_resource(self.anritsu_addr)
+        
+        # print instrument parameters
+        
+        print(self.resource.query("*IDN?"))
+        self.get_instrument_parameters(print_output=True)
 
     def __del__(self):
         """
@@ -364,7 +373,7 @@ class AnritsuCtrl(object):
     def set_freq(self, frequency : float, suppress_warnings=False):
         if self.suppress_warnings is False:
             if frequency <= 10e0:  # input is likely in GHz
-                print(f"\n~~~~\nWarning! received input '{frequency}', which seems to be in GHz instead of MHz. Suppress future errors with the argument 'suppress_warnings=True'\n~~~~\n")
+                print(f"\n~~~~\nWarning! received input '{frequency}', which seems to be in GHz instead of MHz. \n    Please give value in MHz instead. \n\nSuppress future errors with the argument 'suppress_warnings=True'\n~~~~\n")
                 raise ValueError
             
             # duh, this is the correct one
@@ -372,11 +381,11 @@ class AnritsuCtrl(object):
                 pass
             
             elif frequency <= 10e6: # input is likely in KHz
-                print(f"\n~~~~\nWarning! received input '{frequency}', which seems to be in KHz instead of MHz. Suppress future errors with the argument 'suppress_warnings=True'\n~~~~\n")
+                print(f"\n~~~~\nWarning! received input '{frequency}', which seems to be in KHz instead of MHz. \n    Please give value in MHz instead. \n\nSuppress future errors with the argument 'suppress_warnings=True'\n~~~~\n")
                 raise ValueError
                 
             elif frequency <= 10e9: # input is likely in Hz
-                print(f"\n~~~~\nWarning! received input '{frequency}', which seems to be in Hz instead of MHz. Suppress future errors with the argument 'suppress_warnings=True'\n~~~~\n")
+                print(f"\n~~~~\nWarning! received input '{frequency}', which seems to be in Hz instead of MHz. \n    Please give value in MHz instead. \n\nSuppress future errors with the argument 'suppress_warnings=True'\n~~~~\n")
                 raise ValueError
                 
         # send frequency change cmd

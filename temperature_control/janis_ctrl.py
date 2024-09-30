@@ -36,11 +36,16 @@ import errno
 from datetime import datetime
 
 import sys
-# sys.path.append(r'E:\GitHub\bcqt-ctrl')
-# sys.path.append(r'E:\GitHub\bcqt-ctrl\temperature_control')
-# sys.path.append(r'E:\GitHub\bcqt-ctrl\instrument_control')
-sys.path.append(r'E:\GitHub\bcqt-ctrl\pna_control')
-import pna_control as PNA
+sys.path.append(r'E:\GitHub\bcqt-ctrl')
+sys.path.append(r'E:\GitHub\bcqt-ctrl\temperature_control')
+sys.path.append(r'E:\GitHub\bcqt-ctrl\instrument_control')
+# sys.path.append(r'E:\GitHub\bcqt-ctrl\pna_control')
+
+try:
+    import pna_control as PNA
+except:
+    from pna_control import pna_control as PNA
+    
 import os
 
 
@@ -48,13 +53,14 @@ class JanisCtrl(object):
     """
     Class that implments the Janis temperature controller
     """
-    def __init__(self, Tstart, Tstop, dT, *args, **kwargs):
+    def __init__(self, Tstart, Tstop, dT, verbose=False, *args, **kwargs):
         """
         Class constructor
         """
+            
         # Set the defaults for the TCP address and ports
-        self.TCP_IP = 'localhost'
-        # self.TCP_IP = '192.168.0.111'  # probably wont work without some port forwarding
+        # self.TCP_IP = 'localhost'
+        self.TCP_IP = '192.168.0.111'  # probably wont work without some port forwarding
         self.TCP_PORT = 5559
         self.init_socket = True
         
@@ -62,14 +68,14 @@ class JanisCtrl(object):
         # self.vna_addr = 'TCPIP0::K-N5222B-21927::hislip0,4880::INSTR'
         # self.vna_addr = 'TCPIP0::68707CRYOCNTRL::hislip_PXI10_CHASSIS1_SLOT1_INDEX0,4880::INSTR'
         # self.vna_addr = 'TCPIP0::169.254.89.124::inst0::INSTR'
-        self.vna_addr = 'TCPIP0::192.168.0.113::inst0::INSTR'
+        self.vna_addr = 'TCPIP0::192.168.0.105::inst0::INSTR'
         
         # Set as True to start the PID controller, then set to False to allow
         # for updates to the PID values from the previous temperature set point
         self.is_pid_init = True
         self.pid_values = None
-        self.bypass_janis = False
-
+        self.bypass_janis = True
+        
         # Default thermalization time
         self.therm_time = 300. # Wait extra 5 minutes to thermalize [s]
         self.T_eps = 1e-2 # Temperature settling threshold [mK]
@@ -85,6 +91,16 @@ class JanisCtrl(object):
                              'JT'      : 4, 'still'  : 5, 'ICP' : 6,
                              'MC JRS'  : 7, 'Cernox' : 8}
         
+        self.verbose = verbose
+        if self.verbose: 
+            print(f"-- Initializing JanisCtrl object:")
+            print(f"--      {self.dstr = }:")
+            print(f"--      {self.vna_addr = }:")
+            print(f"--      FakeJacob {self.TCP_IP = }")
+            print(f"--                {self.TCP_PORT = }")
+            
+            
+            
         # default value
         self.verbose = False
         
@@ -92,14 +108,26 @@ class JanisCtrl(object):
         # This will overwrite the above defaults with the user-passed kwargs
         for k, v in kwargs.items():
             setattr(self, k, v)
+            
+            if self.verbose is True:
+                print(f"   {k=} : {v=}")
         
-        if self.verbose is True: print(f"Using TCP_IP {self.TCP_IP}\n  and TCP_PORT {self.TCP_PORT}")
-
+        ################################################
+        ################################################
+        self.bypass_janis = True
+        ################################################
+        ################################################
+        
         # Create socket connection to the Janus Gas Handling System
         if self.init_socket and (not self.bypass_janis):
-            if self.verbose is True: print("Connecting to Janis GHS...")
+            # if self.verbose is True: 
+            print("\nNow connecting to Janis GHS (fakejacob)...\n")
             self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.socket.connect((self.TCP_IP, self.TCP_PORT))
+            
+            # host = socket.gethostbyname("localhost")  #Note the extra letters "by"
+            # self.socket.bind((host, self.TCP_PORT))
+            
         else:
             self.socket = None
 
@@ -194,7 +222,7 @@ class JanisCtrl(object):
         temperature in K and timestamp
         """
         if self.bypass_janis:
-            return -1, -1, -1.
+            return None
         self.tcp_send('readCMNTemp(9)')
         data = self.tcp_recv()
         
@@ -207,23 +235,22 @@ class JanisCtrl(object):
             print(f'{e}\ndata: {data}')
             err = True
             
-        
         # Additional error checking
-        # if err:
-        #     Z = None
-        #     T = None
-        #     status = 1
-        # else:
-        #     T = float(T)
-        #     status = int(status)
-        #     tstamp = tstamp.split(' ')
-        #     tstamp = tstamp[0].split('.')[0]
+        if err:
+            Z = None
+            T = None
+            status = 1
+        else:
+            T = float(T)
+            status = int(status)
+            tstamp = tstamp.split(' ')
+            tstamp = tstamp[0].split('.')[0]
 
         if status:
             return {"Z" : Z, "T" : T, "Timestamp" : tstamp_formatted}
         else:
             print(f'tcp_send(readCMNTemp(9)) failed with status: {status}')
-            return None, None, None
+            return None
 
     def read_temp(self, channel_name='still', print_output=True):
         """

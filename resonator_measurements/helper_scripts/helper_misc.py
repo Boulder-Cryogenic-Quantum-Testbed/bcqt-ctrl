@@ -11,7 +11,7 @@ import regex as re
 import numpy as np
 
 from datetime import datetime
-
+import helper_misc as hm
 
 def check_and_make_dir(directory_name):
     directory_name = directory_name.replace('.csv', '').replace('.pdf', '')  # sanitize input
@@ -164,50 +164,75 @@ def average_files(filenames):
 
 
 
-def read_temp_JCtrl(jctrl_path=None, print_output=False):
-        
-    if jctrl_path is None:
-        # jctrl_path = r'C:\Users\Lehnert Lab\GitHub\bcqt-ctrl\temperature_control'
-        jctrl_path = r'E:\GitHub\bcqt-ctrl\temperature_control'
-        # jctrl_path = r'..\temperature_control'
-        
-    sys.path.append(jctrl_path)
-    from janis_ctrl import JanisCtrl
+def read_temp_JCtrl(jctrl_path=None, print_output=False, verbose=True, **kwargs):
+    pass
+    # if verbose: 
+    #     print("Reading DR temperature...")
     
-    # random values to initialize jctrl that aren't actually used
-    Tstart, Tstop, dT, sample_time, T_eps, therm_time = 0.03, 0.315, 0.015, 15, 0.0025, 300
-    
-    JCtrl = JanisCtrl(Tstart, Tstop, dT,
-            sample_time=sample_time, T_eps=T_eps,
-            therm_time=therm_time, Nf=32,
-            init_socket=True, bypass_janis=False,
-            adaptive_averaging=False, output_file=None,
-            data_dir=None)
-    
-    try:
-        Z, T, tstamp = JCtrl.read_cmn().values()
-        output_ls, tstamp_datetime = JCtrl.read_temp('all', False)
-        output_cmn = {"Z" : Z, "T" : T, "tstamp" : tstamp}
-        
-        # print(type(Z), type(T), type(tstamp))
-        
-    except Exception as e:
-        print("Failed to read_temp, error:  ", e)
-        return [None], [None], [None]
-    
-    finally:
-        del JCtrl
-        
-    if print_output is True:
-        print("\nLakeshore:")
-        for k, v in output_ls.items():
-            print(f"  {k} = {v[1]:1.3f}")
+    # if jctrl_path is None:
+    #     jctrl_path = r'E:\GitHub\bcqt-ctrl\temperature_control'
             
-        print("\nCMN:")
-        for k, v in output_cmn.items():
-            print(f"  {k} = {v}")
+    # if verbose: 
+    #     print(f"Using JCtrl library located at {jctrl_path}")
         
-    print("\n")
-    return output_cmn, output_ls, tstamp
+    # sys.path.append(jctrl_path)
+    # from janis_ctrl import JanisCtrl
+    
+    # # random values to initialize jctrl that aren't actually used
+    # Tstart, Tstop, dT, sample_time, T_eps, therm_time = 0.03, 0.315, 0.015, 15, 0.0025, 300
+        
+    # JCtrl = JanisCtrl(Tstart, Tstop, dT,
+    #         sample_time=sample_time, T_eps=T_eps,
+    #         therm_time=therm_time, Nf=32,
+    #         init_socket=True,
+    #         adaptive_averaging=False, output_file=None,
+    #         data_dir=None, verbose=verbose, **kwargs)
+    
+    # try:
+    #     output = JCtrl.read_cmn()
+        
+    #     if output is not None:
+    #         print(output)
+    #         Z, T, tstamp = output.values()
+    #     else:
+    #         return -1, -1, -1
+        
+    #     output_ls, tstamp_datetime = JCtrl.read_temp('all', False)
+    #     output_cmn = {"Z" : Z, "T" : T, "tstamp" : tstamp}
+            
+    # except Exception as e:
+    #     print(f"Failed to read_temp, error:  \n    {e}")
+    #     return [None], [None], [None]
+    
+    # finally:
+    #     del JCtrl
+
+    # if print_output is True:
+    #     print("\nLakeshore:")
+    #     for k, v in output_ls.items():
+    #         print(f"  {k} = {v[1]:1.3f}")
+            
+    #     print("\nCMN:")
+    #     for k, v in output_cmn.items():
+    #         print(f"  {k} = {v}")
+        
+    # print("\n")
+    # return output_cmn, output_ls, tstamp
 
 
+
+def check_valid_fridge_temp(verbose=False, **kwargs):
+    # display("\n\n\nmf.check_valid_fridge_temp() not implemented!\n\n\n")
+    
+    # if verbose is True:
+    #     print("Checking output with hm.check_valid_fridge_temp()")
+    #     print(f"    Received kwargs: {kwargs}")
+        
+    # output = hm.read_temp_JCtrl(verbose=verbose, **kwargs)
+    
+    # if verbose is True:
+    #     print(f"hm.check_valid_fridge_temp() output = \n    {output}")
+    
+    # return output
+    
+    pass

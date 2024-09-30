@@ -153,7 +153,7 @@ if __name__ == '__main__':
         # 'test_frequency_sweep_with_vna',
         # 'test_frequency_power_sweep_with_vna'
     ]
-    run_tests(tests)
+    # run_tests(tests)
     
     test_anritsu = AnritsuCtrl()
     

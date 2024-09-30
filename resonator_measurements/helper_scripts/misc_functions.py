@@ -26,14 +26,10 @@ sys.path.append(r'E:\GitHub\bcqt-ctrl')
 # sys.path.append(r'../scripts')
 # sys.path.append(r'../notebooks')
 
-import helper_scripts.helper_load as hl
-import helper_scripts.helper_misc as hm
+import helper_load as hl
+import helper_misc as hm
 import plot_settings
 
-
-def check_valid_fridge_temp():
-    
-    pass
 
 def prep_report_directory(report_dir, dry_run=True, debug=False):
     

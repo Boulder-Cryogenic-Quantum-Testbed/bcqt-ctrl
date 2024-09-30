@@ -13,7 +13,7 @@ class Labphox:
 
     def __init__(self, port=None, debug=False, IP=None, cmd_logging=False, SN=None, HW_val=False):
         self.debug = debug
-        self.time_out = 5
+        self.time_out = 30
 
 
         if self.debug or cmd_logging:
