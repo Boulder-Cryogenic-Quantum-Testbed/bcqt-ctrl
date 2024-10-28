@@ -158,3 +158,4 @@ if __name__ == '__main__':
     test_anritsu = AnritsuCtrl()
     
     display(test_anritsu.get_instrument_parameters())
+

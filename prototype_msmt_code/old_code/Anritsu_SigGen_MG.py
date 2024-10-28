@@ -1,27 +1,11 @@
 # -*- coding: utf-8 -*-
-"""
-Anritsu MG3692C Signal Generator control
-
-Author: Nick Materise, Kyle Thompson
-Date:   220728
-
-"""
-from pathlib import Path
-import pyvisa, time
-import sys, os
-
-cwd = Path.cwd()
-sys.path.append(str(cwd.parent))  # instrument_control
-sys.path.append(str(cwd.parent / "pna_control")) 
-sys.path.append(str(cwd.parent.parent / "pna_control"))  # depends on where this package is loaded...
-
+import pyvisa, os
 import pna_control as pna
-import numpy as np
-import datetime
+
 
 class AnritsuCtrl(object):
     """
-    Class that implements the Anritsu SCPI control
+    Driver for communicating to Anritsu signal generators with SCPI 
     """
     def __init__(self, anritsu_addr=None, vna_addr=None, 
                        rm_backend = None, suppress_warnings=False,
@@ -34,7 +18,7 @@ class AnritsuCtrl(object):
         """
         
         # define some defaults, using None to check if they were supplied
-        default_anritsu_addr = 'GPIB::7::INSTR' # TWPA sig gen 10/09/24
+        default_anritsu_addr = 'GPIB::7::INSTR'
         default_vna_addr =  'TCPIP0::K-N5231B-57006.local::inst0::INSTR'
         
         anritsu_addr = default_anritsu_addr if anritsu_addr is None else anritsu_addr
@@ -46,7 +30,6 @@ class AnritsuCtrl(object):
         else:
             self.anritsu_addr = default_anritsu_addr
             print(f"Using default address for Anritsu -> {default_anritsu_addr}")
-            # Default instrument addresses GPIB, TCPIP
         
         if vna_addr != default_vna_addr:
             print(f"Not using default VNA IP address {default_vna_addr}\n   - are you sure this is what you want?")
@@ -55,35 +38,15 @@ class AnritsuCtrl(object):
             self.vna_addr = default_vna_addr
             print(f"Using default address for VNA -> {default_vna_addr}")
             
+            
 
         # Open the pyvisa resource manager 
         if rm_backend is not None:
             self.rm = pyvisa.ResourceManager(rm_backend)
         else:
             self.rm = pyvisa.ResourceManager()
+
             
-        self.dstr = datetime.datetime.today().strftime('%y%m%d')
-
-        # Set the precision on the frequency string
-        self.fndigits = 3
-        
-        # set extra info printing and safety override
-        self.verbose = verbose
-        self.suppress_warnings = suppress_warnings
-
-        # Update the arguments and the keyword arguments
-        # This will overwrite the above defaults with the user-passed kwargs
-        for k, v in kwargs.items():
-            setattr(self, k, v)
-
-        # Open the Anritsu instrument object
-        self.resource = self.rm.open_resource(self.anritsu_addr)
-        
-        # print instrument parameters
-        
-        print(self.resource.query("*IDN?"))
-        self.get_instrument_parameters(print_output=True)
-
     def __del__(self):
         """
         Deconstructor to free resources
@@ -255,7 +218,6 @@ class AnritsuCtrl(object):
 
         # Turn off power at the end of the sweep
         self.write_check('OUTP:STAT OFF')
-        
 
     def power_frequency_sweep_2d(self, 
                                  sweep_powers : list,
@@ -315,6 +277,7 @@ class AnritsuCtrl(object):
         vna_dict_ref = vna_dict
         vna_dict_ref["filename_suffix"] = f"REFERENCE_{power}dBm"
         vna_dict_ref["filename_suffix"] = f"REFERENCE_{power}dBm"
+
     # ~~~~~~~~~~~~~~~~~~
     # ~~~  Parameters
     # ~~~~~~~~~~~~~~~~~~
@@ -423,15 +386,6 @@ class AnritsuCtrl(object):
         
         return output_setting, frequency_setting, power_setting
 
-    # ~~~~~~~~~~~~~~~
-    # ~~~  Methods
-    # ~~~~~~~~~~~~~~~
-    
-    
-    
-    
-    
-    
     
     
     
