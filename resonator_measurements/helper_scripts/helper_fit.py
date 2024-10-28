@@ -10,6 +10,10 @@ import glob, os, sys, time
 import datetime, regex
 import uncertainties
 
+sys.path.append(r"E:\GitHub\scresonators")
+sys.path.append(r"E:\GitHub")
+
+
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy as sp
@@ -23,7 +27,7 @@ def fit_single_res(filename, filter_points=[0,0], preprocess_method='linear',
                    use_gauss_filt=False, use_matched_filt=False,
                    use_elliptic_filt=False, use_mov_avg_filt=False,
                    fname_ref=None, data_dir=None, save_dcm_plot=False,
-                   save_fit_dirs=r"fits/", manual_init=None):
+                   save_fit_dirs=r"fits/", manual_init=None, plot_extra=False):
     """
     Fit a single resonator from file
     """
@@ -66,6 +70,7 @@ def fit_single_res(filename, filter_points=[0,0], preprocess_method='linear',
     myres.preprocess_method = preprocess_method
     myres.normalize = normalize
     myres.save_dcm_plot = save_dcm_plot
+    myres.plot_extra = plot_extra
     myres.plot = 'png'
     
     # TODO: multiple
@@ -73,11 +78,14 @@ def fit_single_res(filename, filter_points=[0,0], preprocess_method='linear',
     myres.fit_dir = save_fit_dirs[0]
     
     # Setup the method for fitting
-    try: 
-        myres.fit_method(fit_type, MC_iteration, MC_rounds=MC_rounds,
-                    MC_fix=MC_fix, manual_init=manual_init, MC_step_const=0.3)
-    except Exception as ex:
-        print(f'Exception:\n{ex}')
+    # try: 
+    
+    myres.fit_method(fit_type, MC_iteration, MC_rounds=MC_rounds,
+                MC_fix=MC_fix, manual_init=manual_init, MC_step_const=0.3)
+    
+    # except Exception as ex:
+    #     print("Failed in 'fit_single_res': ")
+    #     print(f'    Exception:\n{ex}')
     
     ##############################################################
     
@@ -87,14 +95,13 @@ def fit_single_res(filename, filter_points=[0,0], preprocess_method='linear',
     return params, err, conf_intervals, fig
 
 
-
 def fit_qiqcfc_vs_power(filenames, powers, filter_points=None,
                         preprocess_method='linear', phi0=0.,
                         use_gauss_filt=False, use_matched_filt=False,
                         use_elliptic_filt=False, filt_idxs=None,
                         use_mov_avg_filt=False, fname_ref=None,
                         data_dir='', show_plots=False, save_dcm_plot=False,
-                        save_fit_dirs=r"fits/", manual_init_list=None):
+                        save_fit_dirs=r"fits/", manual_init_list=None, plot_extra=False):
     """
     Fits multiple resonances at different powers for a given power
     """
@@ -121,7 +128,8 @@ def fit_qiqcfc_vs_power(filenames, powers, filter_points=None,
                                                save_dcm_plot=save_dcm_plot,
                                                manual_init=manual_init,
                                                save_fit_dirs=save_fit_dirs,
-                                               data_dir=data_dir)
+                                               data_dir=data_dir,
+                                               plot_extra=plot_extra)
         # Qcj = params[1] / np.exp(1j*params[3])
         Qcj = params[1] * np.exp(1j*(params[3] + phi0))
         Qij = 1. / (1. / params[0] - np.real(1. / Qcj))
@@ -367,7 +375,8 @@ def power_sweep_fit_drv(atten=[0, -60], sample_name=None,
                         preprocess_method='linear', show_dbm=False,
                         ds = {'QHP' : 1e4, 'nc' : 1e6, 'Fdtls' : 1e-6}, data_dir=None,
                         plot_twinx=True, plot_fit=False, QHP_fix=False, show_plots=False,
-                        save_dcm_plot=False, save_fit_dirs="fits/", manual_init_list=None):
+                        save_dcm_plot=False, save_fit_dirs="fits/", manual_init_list=None,
+                        plot_extra=False):
     """
     Driver for fitting the power sweep data for a given set of data
     """
@@ -409,7 +418,8 @@ def power_sweep_fit_drv(atten=[0, -60], sample_name=None,
             data_dir=data_dir,
             save_dcm_plot=save_dcm_plot,
             save_fit_dirs=save_fit_dirs,
-            manual_init_list=manual_init_list)
+            manual_init_list=manual_init_list, 
+            plot_extra=plot_extra)
 
     # Extract the powers, quality factors, resonance frequencies, and 95 %
     # confidence intervals
@@ -624,8 +634,11 @@ def power_sweep_fit_drv(atten=[0, -60], sample_name=None,
     d_lbls, d_hdls = ax_d.get_legend_handles_labels()
     ax_d.legend(d_lbls, d_hdls, loc='upper right', fontsize=fsize)
 
-        
-    fc_val = hm.get_frequency_from_filename(filenames[0])
+    try:        
+        fc_val = hm.get_frequency_from_filename(filenames[0])
+    except:
+        print(f"{filenames[0] = }")
+        fc_val = 0.1
     fc_str = f"{fc_val:1.3f}".replace(".","p")
     fsuffix = f"_{fc_str}GHz_{temperature}mK_{dstr}.png"
     

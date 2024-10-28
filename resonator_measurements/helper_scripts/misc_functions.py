@@ -228,7 +228,7 @@ def plot_all_circles(dir_path, search_str="\\*\\*.csv", verbose=False,  show_plo
             print(f"[??] data_dir = {data_dir}\n[???] plot_dir = {plot_dir}\n[????] sample_name = {sample_name}\n[?????] dir_path = {dir_path}")
     
     all_powers = []
-    fig, ax = plt.subplots(1, 1, figsize=(8,8))
+    fig, ax = plt.subplots(1, 1, figsize=(12,12))
     for fname, df_key in zip(filenames, df_dict): 
         # don't you just love regex? <3 
         fname_freq = re.search(r"\dp\d{3}GHz", fname)[0]
@@ -251,15 +251,17 @@ def plot_all_circles(dir_path, search_str="\\*\\*.csv", verbose=False,  show_plo
         cmplx = magn_lin*np.exp(1j * phase_rad)
         
         # place info at the top
-        ax.set_title(f"""\nVNA Freq = {fname_freq}
+        ax.set_title(f"""{sample_name}
+                         \nVNA Freq = {fname_freq}
                          \nVNA Power = {fname_power}
                          \nDR Temp = {fname_temp}""")
         
         real = np.real(cmplx)
         imag = np.imag(cmplx)
         
-        plot_string = '-x' if show_line is True else 'x'
-        ax.plot(real, imag, plot_string, label=fname_power)
+        # fmt_string = '-x' if show_line is True else 'x'
+        fmt_string = "o"
+        ax.plot(real, imag, fmt_string, label=fname_power)
         # ax.plot(real, imag, 'bo', markersize=2, markerfacecolor='none', label=fname_power)
         
     ax.set_xlabel("Real [a.u.]")
@@ -269,12 +271,12 @@ def plot_all_circles(dir_path, search_str="\\*\\*.csv", verbose=False,  show_plo
     # ax.yaxis.tick_right()
     # ax.yaxis.set_label_position("right")
     
-    ax.legend()
+    ax.legend(bbox_to_anchor=(1.05, 1.0))
     
     ax.axhline(0, color='k', linestyle=':', linewidth=2)
     ax.axvline(0, color='k', linestyle=':', linewidth=2)
         
-    fig.suptitle(f"       {sample_name}_{fname_freq}_{fname_temp}", fontsize=18)
+    # fig.suptitle(f"{sample_name}", fontsize=18)
     fig.tight_layout()
     
     filename = f"{sample_name}_{fname_freq}_all_resonance_circles.png"
@@ -289,7 +291,7 @@ def plot_all_circles(dir_path, search_str="\\*\\*.csv", verbose=False,  show_plo
         plt.close()
             
 def plot_whole_directory(dir_path, search_str="\\*\\*.csv", max_rows=4, temp_threshold_mK=50, 
-                         plot_min=True, verbose=False, show_plot=True, save_plot=False, plot_dir=None,):
+                         plot_min=True, verbose=False, show_plot=True, save_plot=False, plot_dir=None, plot_zero_lines=True):
     
     if verbose is True: 
         print(dir_path+search_str)
@@ -410,11 +412,11 @@ def plot_whole_directory(dir_path, search_str="\\*\\*.csv", max_rows=4, temp_thr
             if plot_min is True:
                 ax1.axvline(freq_min, linestyle='--', linewidth=3, color='red', alpha=0.75)
                 
-            ax1.legend(bbox_to_anchor=(0.55, 0.3))  # shift the legend a bit out of bounds
-            ax2.legend(bbox_to_anchor=(0.55, 0.3))
+            # ax1.legend(bbox_to_anchor=(0.55, 0.3))  # shift the legend a bit out of bounds
+            # ax2.legend(bbox_to_anchor=(0.55, 0.3))
             
             if temp_int >= temp_threshold_mK:
-                ax2.set_title(f"\nWARNING! \nDR Temp = {temp_int}mK !!", color='r', size=18)
+                ax2.set_title(f"\nWARNING! \nDR Temp = {temp_int}mK !!", color='r', size=14)
             else:
                 ax2.set_title(f"\nDR Temp = {temp_int}mK\n")
                 
@@ -430,8 +432,9 @@ def plot_whole_directory(dir_path, search_str="\\*\\*.csv", max_rows=4, temp_thr
             ax3.yaxis.tick_right()
             ax3.yaxis.set_label_position("right")
             
-            ax3.axhline(0, color='k', linestyle=':', linewidth=2)
-            ax3.axvline(0, color='k', linestyle=':', linewidth=2)
+            if plot_zero_lines is True:
+                ax3.axhline(0, color='k', linestyle=':', linewidth=2)
+                ax3.axvline(0, color='k', linestyle=':', linewidth=2)
             
             fig.tight_layout()
             

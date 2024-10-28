@@ -38,11 +38,15 @@ def get_power_from_filename(filename):
 
 def get_temperature_from_filename(filename):
     # this regex extracts any substring in 'filename'
-    # that has 1-3 digits and ends with mK
-    temp_reg = re.search("[0-9]{1,3}mK", filename)
+    # that has 1-4 digits and ends with mK
+    
+    # regex string explanation:
+    #    \d = any digit, {1,4} = one through four instances of \d
+    temp_reg = re.search("\d{1,4}mK", filename) 
     temp_mK = temp_reg.captures()[0]  # there should only be one match
-    temp = temp_mK[:-2]  # strip off the 'dB'
-    return temp
+    temp = temp_mK.replace("mK", "")  # strip off the 'mK'
+    
+    return float(temp)
 
 
 
