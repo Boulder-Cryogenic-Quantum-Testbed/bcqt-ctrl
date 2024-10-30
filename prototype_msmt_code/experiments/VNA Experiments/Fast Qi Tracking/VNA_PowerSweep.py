@@ -16,7 +16,7 @@ current_dir = Path(".")
 script_filename = Path(__file__).stem
 
 # lazy way to import modules - just append to path... TODO: fix :)
-src_path = Path(r"..\..\src")
+src_path = Path(r"..\..\..\src")
 driver_path = src_path / "drivers"
 data_path = current_dir / "data" / dstr / script_filename 
 csv_path = data_path / "raw_csvs"
