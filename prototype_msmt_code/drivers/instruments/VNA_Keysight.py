@@ -256,6 +256,9 @@ class VNA_Keysight(BaseDriver):
 
     
     def acquire_trace(self):
+        """
+            Run the measurement and stop it once finished
+        """
             
         # initiate display and turn on output
         # self.write_check('OUTPut:STATe ON')
@@ -303,10 +306,15 @@ class VNA_Keysight(BaseDriver):
                 
                 # update the variable and let the while finish
                 check = bool(check_str)
+            
+        self.write_check('OUTPut:STATe OFF')
+        self.write_check('INITiate:CONTinuous OFF')
 
 
     def return_data(self):
-                
+        """
+            Transfer data from VNA to PC
+        """
         if self.configs["segments"] is not None:
             # Read the list of all segments
             freqs = np.array([])
@@ -346,17 +354,28 @@ class VNA_Keysight(BaseDriver):
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
     def take_single_trace(self, Expt_Config = None):
+        """
+            (0) before running this, the instrument should already have 
+                - set_instr_params()
+                - setup_measurement()
+            (1)
+        """
+        # self.print_debug("Taking Single Trace")
         
         # TODO: separate "instr_config" and "expt_config"
-        if self.instr_config is None and Expt_Config is not None: 
-            self.instr_config = Expt_Config
+        # if self.instr_config is None and Expt_Config is not None: 
+        #     self.print_debug("Updating ExptConfig")
+        #     self.instr_config = Expt_Config
+        #
+        # self.instr_config["segments"] = self.compute_homophasal_segments(**self.instr_config)
+        # self.set_instr_params(Expt_Config)
+        # self.get_instr_params()
+        # self.setup_measurement()
+        # self.check_instr_error_queue()
+        # self.acquire_trace()
+        # freqs, magn_dB, phase_deg = self.return_data()
         
-        self.instr_config["segments"] = self.compute_homophasal_segments(**self.instr_config)
-        self.set_instr_params(Expt_Config)
-        self.get_instr_params()
-        self.setup_measurement()
-        self.check_instr_error_queue()
-        self.acquire_trace()
-        freqs, magn_dB, phase_deg = self.return_data()
+        # self.print_debug("Finished Taking Trace")
         
-        return freqs, magn_dB, phase_deg
+        # return freqs, magn_dB, phase_deg
+        raise NotImplemented
