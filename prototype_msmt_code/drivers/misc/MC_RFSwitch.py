@@ -15,7 +15,7 @@
 from urllib.request import urlopen
 import sys
 
-class MiniCircuits_RFSwitch():
+class MC_RFSwitch():
     
     def __init__(self, device_address="192.168.0.115", timeout=5, debug=True):
         
@@ -23,6 +23,12 @@ class MiniCircuits_RFSwitch():
         self.device_address = device_address
         self.timeout = timeout
         
+    
+        if self.debug is True:
+            print(self.Get_Model_Name())
+            print(self.Get_Serial_No())
+            print(self.Get_Attenuation())
+    
     
     
     def Get_HTTP_Result(self, CmdToSend):
@@ -79,3 +85,12 @@ class MiniCircuits_RFSwitch():
             print(f"Command sent -> new switch status {self.Get_HTTP_Result("SWPORT?")}")       
             
         return status
+
+
+if __name__ == "__main__":
+    
+    ip_addr = "192.168.0.115"  
+    
+    atten = MC_RFSwitch(ip_addr, debug=True)
+    
+    pass

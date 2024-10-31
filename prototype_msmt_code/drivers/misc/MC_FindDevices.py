@@ -11,30 +11,34 @@ UDPSock_RCV.bind(addr_RCV)
 UDPSock_RCV.settimeout(1)
 Data_RCV=""
 
-Data_SND = str.encode("MCLRFSWITCH?")    # Query for the relevant product family (encoded to bytes)
-Data_SND = str.encode("MCLDAT?")    # Query for the relevant product family (encoded to bytes)
+all_snds = [str.encode("MCLRFSWITCH?"), str.encode("MCLDAT?")]    # Query for the relevant product family (encoded to bytes)
 
-print ("Sending message '%s'..." % Data_SND)
-UDPSock_SND.sendto(Data_SND, addr_SND)
+num_devices = 3
 
-print ("Listening for up to 5 devices...")
-i=0
-while i<5:                          # Search for up to 5 units
+for Data_SND in all_snds:
+    print("Sending message '{Data_SND}'")
+    UDPSock_SND.sendto(Data_SND, addr_SND)
 
-    print ("Device '%s'..." % str(i + 1))
+    print(f"    Listening for up to {num_devices} devices...")
     
-    try:
-        Data_RCV,addr_RCV = UDPSock_RCV.recvfrom(4951)
-        print (Data_RCV)
+    i=0
+    while i<num_devices:                          # Search for up to x units
 
-    except:                         # Timeout error if no more responses
-        print ("No data received.")
+        print(f"    Device {i+1}")
         
-    i=i+1
+        try:
+            Data_RCV, addr_RCV = UDPSock_RCV.recvfrom(4951)
+            print(str(Data_RCV).replace('\\r\\n','\n        ').replace("b'Model Name", "        Model Name"))
 
-print ("End of UDP listening...")
+        except:                         # Timeout error if no more responses
+            print("    No data received.")
+            
+        i=i+1
+
+print("End of UDP listening...")
+
+print('Client stopped.')
+
 
 UDPSock_SND.close()             # Close sockets
 UDPSock_RCV.close()
-
-print ('Client stopped.')
