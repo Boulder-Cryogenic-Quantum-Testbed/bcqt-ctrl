@@ -1,10 +1,16 @@
+
+*data*\*
+*data*
+
+# BCQT common data filetypes
+*GHZ*.csv
+*qiqc*.csv*
+*GHZ*.png*
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
-
-*data*\*
-*data*
 
 # C extensions
 *.so
