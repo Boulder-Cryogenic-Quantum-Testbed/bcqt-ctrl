@@ -1,5 +1,5 @@
 """
-# setup_experiment.py
+# setup_qick_board.py
 
 08/27/24
 

@@ -2,7 +2,9 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from pprint import pprint
 from pathlib import Path
-import time
+import time, sys
+
+sys.path.append(str(Path("..").resolve()))
 
 from BaseDriver import BaseDriver
 
@@ -152,15 +154,16 @@ if __name__ == '__main__':
     
     Anritsu_InstrConfig = {
         "instrument_name" : "TEST_ANRITSU",
-        "rm_backend" : None,
+        # "rm_backend" : None,
+        "rm_backend" : "@py",
         "amplitude" : 0,
         # "instr_address" : "192.168.0.100",
-        "instr_address" : 'GPIB::8::INSTR',  # test instr
-        # "instr_address" : 'GPIB::9::INSTR',  # twpa
+        # "instr_address" : 'GPIB::8::INSTR',  # test instr
+        "instr_address" : 'GPIB::9::INSTR',  # twpa
         
     }
     
-    test_anritsu = AnritsuSG(Anritsu_InstrConfig, debug=True)
+    test_anritsu = SG_Anritsu(Anritsu_InstrConfig, debug=True)
     
     msg = test_anritsu.idn
     test_anritsu.set_output(False)
@@ -168,16 +171,16 @@ if __name__ == '__main__':
     
     test_anritsu.print_class_members()
     
-    time.sleep(1)
-    test_anritsu.return_instrument_parameters(print_output=True)
-    test_anritsu.set_freq(2000)
+    # time.sleep(1)
+    # test_anritsu.return_instrument_parameters(print_output=True)
+    # test_anritsu.set_freq(2000)
     
-    time.sleep(1)
-    test_anritsu.return_instrument_parameters(print_output=True)
-    test_anritsu.set_freq(5000)
+    # time.sleep(1)
+    # test_anritsu.return_instrument_parameters(print_output=True)
+    # test_anritsu.set_freq(5000)
     
-    time.sleep(1)
-    test_anritsu.return_instrument_parameters(print_output=True)
+    # time.sleep(1)
+    # test_anritsu.return_instrument_parameters(print_output=True)
     
     
     
