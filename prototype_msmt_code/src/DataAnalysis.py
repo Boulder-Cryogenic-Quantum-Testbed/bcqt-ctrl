@@ -12,8 +12,12 @@ from pathlib import Path
 scres_path_1 = Path(r"C:\Users\Lehnert Lab\GitHub\scresonators")
 # scres_path_1 = Path(r"C:\Users\Lehnert Lab\GitHub\scresonators-andre")
 scres_path_2 = Path(r"E:\GitHub\scresonators")
+scres_path_3 = Path(r"/Users/jlr7/OneDrive - UCB-O365/GitHub/scresonators")
+
 sys.path.append(str(scres_path_1))
 sys.path.append(str(scres_path_2))
+sys.path.append(str(scres_path_3))
+
 
 import fit_resonator.resonator as res
 import fit_resonator.fit as fsd
@@ -65,7 +69,7 @@ class DataAnalysis():
         # use pathlib to ensure save directory exists
         # TODO: move this to DataProcessor
         if save_dir is None:
-            save_dir = Path(r".\data").absolute()
+            save_dir = Path(r"data").absolute()
             save_dir.mkdir(parents=True, exist_ok=True)
         elif type(save_dir) == Path:
             save_dir = save_dir.absolute()
@@ -83,20 +87,20 @@ class DataAnalysis():
         MC_iteration = 10
         MC_rounds = 1e3
         MC_fix = []
-        normalize = 10
+        normalize_pts = 10
 
         myres = res.Resonator()
+        print(res.__file__)
+        print(myres)
         
         myres.preprocess_method = "circle"
-        myres.normalize = normalize
+        myres.normalize_pts = normalize_pts
         myres.plot = 'png'
         
         freqs = data_df["Frequency"].values
         magn_dB = data_df["S21 [dB]"].values
         phase_rad = data_df["Phase [rad]"].values
         magn_lin = 10 ** (magn_dB / 20)
-        
-        save_dcm_plo
         
         
         # print(freqs, magn_dB, phase_rad, magn_lin)
