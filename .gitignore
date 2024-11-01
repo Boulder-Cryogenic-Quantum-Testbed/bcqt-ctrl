@@ -1,6 +1,7 @@
 
 
 # BCQT common data filetypes
+*.csv
 *GHZ*.csv
 *qiqc*.csv*
 *GHZ*.png*
