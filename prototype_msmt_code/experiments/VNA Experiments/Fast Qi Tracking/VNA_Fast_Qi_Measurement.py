@@ -70,23 +70,23 @@ if "all_dfs" not in locals().keys():
 # %%
 
 all_fcs =  [ #5.733901e9,
-             5.773425e9,
-             5.822726e9,
+             #5.773425e9,
+             #5.822726e9,
              5.863280e9,
             
-             6.256667811e9,   # sucks, doesnt saturate
-             6.306375544e9,   # saturates around -78 dBm
-             6.360336e9,
-             6.417038e9
+             #6.256667811e9,   # sucks, doesnt saturate
+             #6.306375544e9,   # saturates around -78 dBm
+             #6.360336e9,
+             #6.417038e9
             ]
 
 
 Expt_Config = {
     "points" : 100,
-    "fc" : all_fcs[1],
+    # "fc" : all_fcs[1],
     "span" : 0.1e6,
     "if_bandwidth" : 500,
-    "power" : -65,
+    "power" : -72,
     "edelay" : 76.36,
     "averages" : 2,
     "sparam" : 'S21',
@@ -100,101 +100,120 @@ Expt_Config = {
 
 # %%
 
-num_msmt = 500
+sets = 100
+num_msmt_per_set = 10000
 
+start_time = time.time()
 
-for res_idx, fc in enumerate(all_fcs):
+# measure all resonators once for X sets, with Y traces/resonator in each set
+for set_idx in range(sets): 
     
-    Expt_Config["segments"] = PNA_X.compute_homophasal_segments(**Expt_Config)
-    Expt_Config["fc"] = fc
+    for res_idx, fc in enumerate(all_fcs):
     
-    PNA_X.set_instr_params(Expt_Config)
-    PNA_X.get_instr_params()
-    PNA_X.setup_measurement()
-    
-    
-    fit_results = {}
-    for idx in range(num_msmt):
-        Expt_Config["time_start"] = datetime.now()
+        Expt_Config["segments"] = PNA_X.compute_homophasal_segments(**Expt_Config)
+        Expt_Config["fc"] = fc
         
-        PNA_X.check_instr_error_queue()
-        PNA_X.acquire_trace()
-        freqs, magn_dB, phase_deg = PNA_X.return_data()
+        PNA_X.set_instr_params(Expt_Config)
+        PNA_X.get_instr_params()
+        PNA_X.setup_measurement()
         
-        # freqs, magn, phase = PNA_X.take_single_trace(Expt_Config)
-
-        df, fig, axes = plot_data_with_pandas(freqs, magn_dB, phase_deg=phase_deg)
-
-        title_str = str(f"{Expt_Config["span"]/1e6:1.2f}MHz_span_{Expt_Config["averages"]}_avgs_{Expt_Config["if_bandwidth"]}_IFBW_{Expt_Config["power"]}_dBm")
-        fig = axes["A"].get_figure()
-        fig.suptitle(title_str, size=16)
-        fig.tight_layout()
-        plt.show()
-
-        all_dfs[title_str] = df
-
-        SingleFit = DataAnalysis(None, dstr)
-
-        fc, span, ifbw, avg, power = Expt_Config["fc"], Expt_Config["span"], Expt_Config["if_bandwidth"], Expt_Config["averages"], Expt_Config["power"]
-        name = f"Msmt{idx+1}_span_{span/1e3:1.0f}kHz_power_{power}dBm_{avg}_avgs"
-
-        res_dir = csv_path / f"Res{res_idx}_{fc/1e6:1.0f}MHz"
-        res_dir.mkdir(parents=True, exist_ok=True)
-        filename = str(res_dir / f"{name}.csv")
-        df.to_csv(filename)
-
-        try:
-            # output_params, conf_array, error, init, output_path
-            params, conf_intervals, err, init1, fig = SingleFit.fit_single_res(data_df=df, save_dcm_plot=False, plot_title=filename, save_path=dcm_path)
-        except Exception as e:
-            print(f"Failed to plot DCM fit for {power} dBm -> {filename = }")
-            print(f"Error: {e}")
-            continue
-
-        Q, Qc, fc, phi = params
-        Q_err, Qi_err, Qc_err, Qc_Re_err, phi_err, fc_err = conf_intervals
+        fit_results = {}
+        res_start_time = time.time()
         
-        Qi = 1/(1/Q - np.cos(phi)/np.abs(Qc))
+        for idx in range(num_msmt_per_set):
         
-        params = [Q, Qi, Qc, fc, phi]
-        
-        parameters_dict = {
-            "power" : power,
-            "Q" : Q,
-            "Q_err" : Q_err,
-            "Qi" : Qi,
-            "Qi_err" : Qi_err,
-            "Qc" : Qc,
-            "Qc_err" : Qc_err,
-            "fc" : fc,
-            "fc_err" : fc_err,
-            "phi" : phi,
-            "phi_err" : phi_err,
-            "meas_time" : Expt_Config["time_start"]
-        }
+            Expt_Config["time_start"] = datetime.now()
+            
+            # PNA_X.setup_measurement()
+            PNA_X.check_instr_error_queue()
+            PNA_X.acquire_trace()
+            freqs, magn_dB, phase_deg = PNA_X.return_data()
+            
+            # freqs, magn, phase = PNA_X.take_single_trace(Expt_Config)
 
-        perc_errs = {
-            "Q_perc" : Q_err / Q,
-            "Qi_perc" : Qi_err / Qi,
-            "Qc_perc" : Qc_err / Qc,
-        }
-        
-    
-        fit_results[filename] = (df, Expt_Config, parameters_dict, perc_errs)
-        
-        plt.show()
-    
-    all_param_dicts = {}
-    for key, (df, Expt_Config, parameters_dict, perc_errs) in fit_results.items():
-        all_param_dicts[key] = parameters_dict
-    
-    fit_dict_name = str((csv_path / "..").resolve() / f"{fc/1e3:1.0f}MHz_all_fit_results.csv")
-        
-    df_fit_results = pd.DataFrame.from_dict(all_param_dicts, orient="index").reset_index()
-    df_fit_results.to_csv(fit_dict_name)
-    # df_fit_results.drop("phi_err", axis="columns", inplace=True)  
+            df, fig, axes = plot_data_with_pandas(freqs, magn_dB, phase_deg=phase_deg)
 
+            title_str = str(f"{Expt_Config["span"]/1e6:1.2f}MHz_span_{Expt_Config["averages"]}_avgs_{Expt_Config["if_bandwidth"]}_IFBW_{Expt_Config["power"]}_dBm")
+            fig = axes["A"].get_figure()
+            fig.suptitle(title_str, size=16)
+            fig.tight_layout()
+            plt.show()
+            
+            
+            all_dfs[title_str] = df
+
+            SingleFit = DataAnalysis(None, dstr)
+
+            fc, span, ifbw, avg, power = Expt_Config["fc"], Expt_Config["span"], Expt_Config["if_bandwidth"], Expt_Config["averages"], Expt_Config["power"]
+            name = f"Set{set_idx+1}_Msmt{idx+1}_span_{span/1e3:1.0f}kHz_power_{power}dBm_{avg}_avgs"
+
+            res_dir = csv_path / f"Res{res_idx}_{fc/1e6:1.0f}MHz"
+            res_dir.mkdir(parents=True, exist_ok=True)
+            filename = str(res_dir / f"{name}.csv")
+            
+            # want to add datetime, but must match dimensions, so just add it as first row... oops :)
+            datetime_row = pd.DataFrame({"Frequency" : datetime.now(), "S21 [dB]" : datetime.now(), "Phase [rad]" : datetime.now()}, index=["datetime.now()"])
+            df2 = pd.concat([datetime_row, df.iloc[:]])
+            df2.to_csv(filename)
+
+        #     try:
+        #         # output_params, conf_array, error, init, output_path
+        #         params, conf_intervals, err, init1, fig = SingleFit.fit_single_res(data_df=df, save_dcm_plot=False, plot_title=filename, save_path=dcm_path)
+        #     except Exception as e:
+        #         print(f"Failed to plot DCM fit for {power} dBm -> {filename = }")
+        #         print(f"Error: {e}")
+        #         continue
+
+        #     Q, Qc, fc, phi = params
+        #     Q_err, Qi_err, Qc_err, Qc_Re_err, phi_err, fc_err = conf_intervals
+            
+        #     Qi = 1/(1/Q - np.cos(phi)/np.abs(Qc))
+            
+        #     params = [Q, Qi, Qc, fc, phi]
+            
+        #     parameters_dict = {
+        #         "power" : power,
+        #         "Q" : Q,
+        #         "Q_err" : Q_err,
+        #         "Qi" : Qi,
+        #         "Qi_err" : Qi_err,
+        #         "Qc" : Qc,
+        #         "Qc_err" : Qc_err,
+        #         "fc" : fc,
+        #         "fc_err" : fc_err,
+        #         "phi" : phi,
+        #         "phi_err" : phi_err,
+        #         "meas_time" : Expt_Config["time_start"]
+        #     }
+
+        #     perc_errs = {
+        #         "Q_perc" : Q_err / Q,
+        #         "Qi_perc" : Qi_err / Qi,
+        #         "Qc_perc" : Qc_err / Qc,
+        #     }
+            
         
+            # fit_results[filename] = (df, Expt_Config, parameters_dict, perc_errs)
+            
+        #     plt.close()
+            
+        
+        # all_param_dicts = {}
+        # for key, (df, Expt_Config, parameters_dict, perc_errs) in fit_results.items():
+        #     all_param_dicts[key] = parameters_dict
+        
+        # fit_dict_name = str((csv_path / "..").resolve() / f"{fc/1e3:1.0f}MHz_all_fit_results.csv")
+            
+        # df_fit_results = pd.DataFrame.from_dict(all_param_dicts, orient="index").reset_index()
+        # df_fit_results.to_csv(fit_dict_name)
+        # df_fit_results.drop("phi_err", axis="columns", inplace=True)  
+
+        end_time = time.time()
+        
+        resonator_elapsed_time = end_time - res_start_time
+        total_elapsed_time = end_time - start_time 
+        display(f"Finished Resonator [{res_idx}/{len(all_fcs)}]! \nSingle resonator elapsed time: {resonator_elapsed_time/60:1.1f} minutes.\nTotal measurement resonator elapsed time: {total_elapsed_time/60:1.1f} minutes.")
+            
 
 
 
