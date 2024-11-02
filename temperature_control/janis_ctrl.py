@@ -1048,7 +1048,8 @@ def compute_segments(fc, span, p, pc, beta, fscale, Noffres, offresfraction, Nf=
 
         np.set_printoptions(precision=4)
 
-        # Homophasal, near resonance
+        # homophasal near resonance
+        # and linear off resonance
         hsegments = [f',1,2,{ff1*fscale},{ff2*fscale}'
                 for ff1, ff2 in zip(freq[0::2], freq[1::2])][1:-1]
         fap = np.min(freq[1:-1]) * fscale
