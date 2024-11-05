@@ -128,7 +128,7 @@ class VNA_Keysight(BaseDriver):
         
         if "fc" in self.configs:
             self.print_console("Found 'fc' in configs-  switch to using f_center!")
-            self.configs("f_center") = self.configs("fc")
+            self.configs["f_center"] = self.configs["fc"]
             del self.configs["fc"] 
         
         if "f_center" in self.configs and "f_span" in self.configs:

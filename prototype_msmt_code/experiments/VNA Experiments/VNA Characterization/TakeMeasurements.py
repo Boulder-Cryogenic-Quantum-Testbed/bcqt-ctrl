@@ -6,7 +6,6 @@
 from pathlib import Path
 from datetime import datetime
 import sys
-import quick_helpers as qh
 import matplotlib.pyplot as plt
 import pandas as pd
 
@@ -38,6 +37,7 @@ for path in all_paths:
 
 # %%
 
+import quick_helpers as qh
 from VNA_Keysight import VNA_Keysight
 
 VNA_Keysight_InstrConfig = {
