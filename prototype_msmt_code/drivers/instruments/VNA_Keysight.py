@@ -235,6 +235,69 @@ class VNA_Keysight(BaseDriver):
             
         return segments
     
+    def setup_s2p_measurement(self, Expt_Config=None):
+        """ 
+            duplicate of setup_measurement, but with all 
+                four sparameters instead of just s21
+        """
+        
+        if Expt_Config is not None:
+            self.print_console("Updating Expt_Config...")
+            self.set_instr_params(Expt_Config)
+        
+        self.print_console("Initializing VNA for all four s-parameter measurement...")
+        self.write_check('*RST')
+        self.write_check('*CLS')
+
+        # self.write_check('SYSTem:FPRESet')
+        self.write_check('SYSTem:UPRESet')
+        time.sleep(0.05)
+        self.write_check('OUTPut:STATe OFF')
+
+        # Initial setup for measurement
+        ## Query the existing measurements
+        measurements = self.query_check('CALC1:PAR:CAT:EXTended?')
+
+        ## If any measurements exist, delete them all
+        if measurements != 'NO CATALOG':
+            self.write_check('CALC1:PARameter:DELete:ALL')
+        
+        # create measurements, create vna display windows, and set all of them to log format
+        for idx, sparam in enumerate(['S11', 'S12', 'S21', 'S22']):
+            self.write_check(f'CALC1:MEASure{idx+1}:DEFine \"{sparam}\"')
+            self.write_check(f'CALC1:PAR:MNUM {idx+1}')  # select ch
+            self.write_check(f'DISPlay:WINDow{idx+1} ON')  # create window
+            self.write_check(f'DISPlay:MEAS{idx+1}:FEED {idx+1}')  # display meas 1 on window 1
+            self.write_check(f'CALC1:CORRection:EDELay:TIME {self.configs["edelay"]}NS')
+            self.write_check(f'CALC1:MEASure{idx+1}:FORMat MLOGarithmic')
+            
+        # set frequency sweep
+        if self.configs["segments"] is not None:
+            num_segments = len(self.configs["segments"])
+            seg_data = ''.join([s for s in self.configs["segments"]])
+            self.write_check(f"SENSe1:SWEep:TYPE SEGment")
+            self.write_check(f'SENSe1:SEGMent:LIST SSTOP, {num_segments}{seg_data}')
+        else:
+            self.write_check("SENSe1:SWEep:TYPE LINear")
+            self.write_check(f'SENSe1:SWEep:POINts {self.configs["n_pts"]}')
+            self.write_check(f'SENSe1:FREQuency:CENTer {self.configs["f_center"]}HZ')
+            self.write_check(f'SENSe1:FREQuency:SPAN {self.configs["f_span"]}HZ')
+            self.write_check(f'SENSe1:SWEep:TIME:AUTO ON')
+        
+        # TODO: figure out how to set port1 and port2 both as inputs and outputs for s2p measurements 
+        
+        raise NotImplemented
+    
+        self.write_check(f'SOUR1:POW1 {self.configs["power"]}')
+        self.write_check(f'SENSe1:AVERage:STATe ON')
+        self.write_check(f'SENSe1:AVERage:Count {self.configs["averages"] // 1}')
+        self.write_check(f'SENSe1:BANDwidth {self.configs["if_bandwidth"]}HZ')
+
+        # autoscale for visibility on the display
+        self.write_check(f'DISPlay:WINDow1:TRACe1:Y:SCAle:AUTO')
+        self.write_check(f'DISPlay:WINDow2:TRACe1:Y:SCAle:AUTO')
+
+
     def setup_measurement(self, Expt_Config=None):
         
         '''
