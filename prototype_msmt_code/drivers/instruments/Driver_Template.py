@@ -13,8 +13,8 @@ class Example_Driver(BaseDriver):
     # want to change the original method in BaseDriver,
     # just call it using the super() function
     
-    def __init__(self, InstrConfig_Dict, rm_backend="@py", instr_resource=None, instr_address=None, debug=False, **kwargs):
-        super().__init__(InstrConfig_Dict, rm_backend, instr_resource, instr_address, debug, **kwargs)
+    def __init__(self, InstrConfig_Dict, instr_resource=None, instr_address=None, debug=False, **kwargs):
+        super().__init__(InstrConfig_Dict, instr_resource, instr_address, debug, **kwargs)
         
     def read_check(self, fmt=...):
         return super().read_check(fmt)

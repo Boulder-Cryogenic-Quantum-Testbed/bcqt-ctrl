@@ -12,8 +12,8 @@ from BaseDriver import BaseDriver
 class SG_Anritsu(BaseDriver):
 
 
-    def __init__(self, InstrConfig_Dict, rm_backend=None, instr_resource=None, instr_address=None, debug=False, **kwargs):
-        super().__init__(InstrConfig_Dict, rm_backend, instr_resource, instr_address, debug, **kwargs)
+    def __init__(self, InstrConfig_Dict, instr_resource=None, instr_address=None, debug=False, **kwargs):
+        super().__init__(InstrConfig_Dict, instr_resource, instr_address, debug, **kwargs)
         
         if "suppress_warnings" in InstrConfig_Dict:
             self.suppress_warnings = InstrConfig_Dict["suppress_warnings"]

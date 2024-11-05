@@ -15,8 +15,8 @@ class VNA_Keysight(BaseDriver):
     # ~~~  Base Class Features
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-    def __init__(self, InstrConfig_Dict, rm_backend="@py", instr_resource=None, instr_address=None, debug=False, **kwargs):
-        super().__init__(InstrConfig_Dict, rm_backend, instr_resource, instr_address, debug, **kwargs)
+    def __init__(self, InstrConfig_Dict, instr_resource=None, instr_address=None, debug=False, **kwargs):
+        super().__init__(InstrConfig_Dict, instr_resource, instr_address, debug, **kwargs)
         
     def read_check(self, fmt = str):
         return super().read_check(fmt)
@@ -287,20 +287,20 @@ class VNA_Keysight(BaseDriver):
         
         # check if the VNA has finished every second, in my experience the *OPC? or *WAI command isnt very reliable
         check = False
-        tstart = time.time()
+        tstart = time.time()   
         
         while check is False:
-            time.sleep(1)
+            time.sleep(0.01)
             t_elapsed = time.time() - tstart
-            print(f"      time elapsed: [{t_elapsed:1.0f}s]")
-                
+            print(f"      time elapsed: [{t_elapsed:1.2f}s]")
+            
             # check_str is a string, "0" = busy or "1" = complete
             check_str = self.query_check('STAT:OPER:AVER1:COND?')[1]
 
             # once it is "1", print that we're finished
             if check_str != "0":
                 print(f"\nTrace finished. Uploading now.")
-                print(f"\n   Total time elapsed: {t_elapsed:1.0f} seconds")
+                print(f"\n   Total time elapsed: {t_elapsed:1.2f} seconds")
                 if t_elapsed >= 600:
                     print(f"                     = {t_elapsed/60:1.1f} minutes \n")
                 
