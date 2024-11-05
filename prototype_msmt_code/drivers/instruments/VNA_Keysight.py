@@ -49,9 +49,9 @@ class VNA_Keysight(BaseDriver):
         
         # TODO: do this better
         # self.configs.power = configs["power"] 
-        # self.configs.fc = configs["fc"] 
-        # self.configs.span = configs["span"] 
-        # self.configs.points = configs["points"] 
+        # self.configs.f_center = configs["f_center"] 
+        # self.configs.span = configs["f_span"] 
+        # self.configs.n_pts = configs["n_pts"] 
         # self.configs.averages = configs["averages"] 
         # self.configs.if_bandwidth = configs["if_bandwidth"] 
         # self.configs.edelay = configs["edelay"] 
@@ -66,9 +66,9 @@ class VNA_Keysight(BaseDriver):
             return None
         
         power = self.configs["power"]
-        fc = self.configs["fc"]
-        span = self.configs["span"]
-        points = self.configs["points"]
+        f_center = self.configs["f_center"]
+        f_span = self.configs["f_span"]
+        n_pts = self.configs["n_pts"]
         averages = self.configs["averages"]
         if_bandwidth = self.configs["if_bandwidth"]
         edelay = self.configs["edelay"]
@@ -76,9 +76,9 @@ class VNA_Keysight(BaseDriver):
         
         all_params = { 
                      "power" : power , 
-                     "fc" : fc , 
-                     "span" : span , 
-                     "points" : points , 
+                     "f_center" : f_center , 
+                     "f_span" : f_span , 
+                     "n_pts" : n_pts , 
                      "averages" : averages , 
                      "if_bandwidth" : if_bandwidth , 
                      "edelay" : edelay , 
@@ -104,15 +104,68 @@ class VNA_Keysight(BaseDriver):
         #     self.write_check(f'SENSe1:SEGMent:LIST SSTOP, {num_segments}{seg_data}')
         # else:
         #     self.write_check("SENSe1:SWEep:TYPE LINear")
-        #     self.write_check(f'SENSe1:SWEep:POINts {points}')
-        #     self.write_check(f'SENSe1:FREQuency:CENTer {fc}HZ')
-        #     self.write_check(f'SENSe1:FREQuency:SPAN {span}HZ')
+        #     self.write_check(f'SENSe1:SWEep:POINts {n_pts}')
+        #     self.write_check(f'SENSe1:FREQuency:CENTer {f_center}HZ')
+        #     self.write_check(f'SENSe1:FREQuency:SPAN {f_span}HZ')
 
         #     self.write_check(f'SENSe1:SWEep:TIME:AUTO ON')
             
         pass
+    
+    
+    def get_frequency_bounds(self, ):
+        return NotImplemented
+    
+    def set_frequency_bounds(self):
         
-    def compute_homophasal_segments(self, fc, span, Noffres=None, points=None, segment_type='homophasal', **kwargs):
+        """
+            Get f_center and f_span, or f_start and f_stop,
+                and return an array with number of points.
+                
+            Also, save whichever set we didn't start with 
+                into the instrument configs
+        """
+        
+        if "fc" in self.configs:
+            self.print_console("Found 'fc' in configs-  switch to using f_center!")
+            self.configs("f_center") = self.configs("fc")
+            del self.configs["fc"] 
+        
+        if "f_center" in self.configs and "f_span" in self.configs:
+            f_half_span = self.configs["f_span"] / 2
+            f_start = self.configs["f_center"] - f_half_span
+            f_stop = self.configs["f_center"] + f_half_span
+            self.configs["f_start"], self.configs["f_stop"] = f_start, f_stop
+            
+        elif "f_start" in self.configs and "f_stop" in self.configs:
+            f_start, f_stop = self.configs["f_start"], self.configs["f_stop"]
+            f_span = f_stop - f_start
+            self.configs["f_center"] = f_start + f_span/2
+            self.configs["f_span"] = f_span
+        
+        # n_pts = self.configs["n_pts"]
+        # np.linspace(f_start, f_stop, n_pts)
+    
+    def load_kwargs_into_configs(self, **kwargs):
+        
+        # backwards compatability, lazy kwargs
+        if "f_center" in kwargs:
+            self.configs["f_center"] = kwargs["f_center"]
+            del kwargs["f_center"]
+        if "fc" in kwargs:
+            self.configs["f_center"] = kwargs["fc"]
+            del kwargs["fc"]
+        if "f_span" in kwargs:
+            self.configs["f_span"] = kwargs["f_span"]
+            del kwargs["f_span"]
+        if "n_pts" in kwargs:
+            self.configs["n_pts"] = kwargs["n_pts"]
+            del kwargs["n_pts"]
+        
+        if len(kwargs) >= 1:
+            self.print_console(f"Loaded all kwargs except for these remaining:\n    {kwargs}")
+        
+    def compute_homophasal_segments(self, Noffres=None, segment_type=None, **kwargs):
         """
             Computes segments needed to perform homophasal measurements
                 "segments" are just strings that contain the parameters
@@ -123,25 +176,37 @@ class VNA_Keysight(BaseDriver):
                               ', 1, <# of pts>, <start freq>, <stop freq>
         """
         
-        # conversion factor for MHz -> Hz
-        fscale = 1 if fc >= 1e6 else 1e6
+        if segment_type is None and "segment_type" in self.configs:
+            segment_type = self.configs["segment_type"]
+        else:
+            segment_type = 'homophasal'
         
-        # conversion factor for GHz -> Hz  (overwrites previous)
-        fscale = 1 if fc >= 1e9 else 1e9
+        # load kwargs into vna configs
+        self.load_kwargs_into_configs(kwargs)
+        
+        f_center = self.configs["f_center"]
+        f_span = self.configs["f_span"]
+        n_pts = self.configs["n_pts"]
+        
+        # conversion factor for MHz -> Hz
+        fscale = 1 if f_center >= 1e6 else 1e6
+        
+        # conversion factor for GHz -> Hz  (overwrites previous value for fscale)
+        fscale = 1 if f_center >= 1e9 else 1e9
         
         # Estimate the number of linewidths per sweep
-        Q = 20 * (fc / span) 
-
-        # Compute the frequencies
-        fstart = fc - span / 2
-        fstop  = fc + span / 2
+        Q = 20 * (f_center / f_span) 
         
-        # determine homophasal
+        # Compute the frequencies
+        fstart = f_center - f_span / 2
+        fstop  = f_center + f_span / 2
+        
+        # determine homophasa  XXX: does it matter we always default to pi/32?
         theta0 = np.pi / 32
-        Nf = 30 if points is None else points
+        Nf = 30 if n_pts is None else n_pts
         theta = np.linspace(-np.pi + theta0, (np.pi - theta0), Nf + 2)
-        freq = fc * (1 - 0.5 * np.tan(theta / 2) / Q)           
-            
+        freq = f_center * (1 - 0.5 * np.tan(theta / 2) / Q)           
+        
         if segment_type == 'homophasal':
             # homophasal for entire freq range
             segments = [f',1,2,{ff1*fscale},{ff2*fscale}'
@@ -161,9 +226,12 @@ class VNA_Keysight(BaseDriver):
             segments = [f',1,{Noffres},{fstop*fscale}, {fb}',
                         *hsegments,
                         f',1,{Noffres},{fa},{fstart*fscale}']
-        else:
+        elif segment_type == 'linear':
             # simple linear sweep
-            segments = [f',1,{points},{fstop*fscale}, {fstart*fscale}']
+            segments = [f',1,{n_pts},{fstop*fscale}, {fstart*fscale}']
+            
+        else:
+            raise ValueError("Missing segment_type in compute_homophasal_segments for VNA_Keysight driver.")
             
         return segments
     
@@ -210,7 +278,7 @@ class VNA_Keysight(BaseDriver):
         ## If any measurements exist, delete them all
         if measurements != 'NO CATALOG':
             self.write_check('CALC1:PARameter:DELete:ALL')
-            
+        
         # create measurements
         self.write_check(f'CALC1:MEASure1:DEFine \"{self.configs["sparam"]}\"')
         self.write_check(f'CALC1:MEASure2:DEFine \"{self.configs["sparam"]}\"')
@@ -223,10 +291,9 @@ class VNA_Keysight(BaseDriver):
             self.write_check(f'SENSe1:SEGMent:LIST SSTOP, {num_segments}{seg_data}')
         else:
             self.write_check("SENSe1:SWEep:TYPE LINear")
-            self.write_check(f'SENSe1:SWEep:POINts {self.configs["points"]}')
-            self.write_check(f'SENSe1:FREQuency:CENTer {self.configs["fc"]}HZ')
-            self.write_check(f'SENSe1:FREQuency:SPAN {self.configs["span"]}HZ')
-
+            self.write_check(f'SENSe1:SWEep:POINts {self.configs["n_pts"]}')
+            self.write_check(f'SENSe1:FREQuency:CENTer {self.configs["f_center"]}HZ')
+            self.write_check(f'SENSe1:FREQuency:SPAN {self.configs["f_span"]}HZ')
             self.write_check(f'SENSe1:SWEep:TIME:AUTO ON')
         
         self.write_check(f'SOUR1:POW1 {self.configs["power"]}')
