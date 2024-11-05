@@ -66,13 +66,17 @@ class VNA_Keysight(BaseDriver):
             return None
         
         power = self.configs["power"]
-        f_center = self.configs["f_center"]
-        f_span = self.configs["f_span"]
         n_pts = self.configs["n_pts"]
         averages = self.configs["averages"]
         if_bandwidth = self.configs["if_bandwidth"]
         edelay = self.configs["edelay"]
         sparam = self.configs["sparam"]
+        if "f_center" in self.configs:
+            
+            f_center = self.configs["f_center"]
+            f_span = self.configs["f_span"]
+        elif "f_start" in self.config:
+            
         
         all_params = { 
                      "power" : power , 
@@ -129,7 +133,7 @@ class VNA_Keysight(BaseDriver):
         if "fc" in self.configs:
             self.print_console("Found 'fc' in configs-  switch to using f_center!")
             self.configs["f_center"] = self.configs["fc"]
-            del self.configs["fc"] 
+            del self.configs["fc"]   # remove bad config label
         
         if "f_center" in self.configs and "f_span" in self.configs:
             f_half_span = self.configs["f_span"] / 2
@@ -147,6 +151,9 @@ class VNA_Keysight(BaseDriver):
         # np.linspace(f_start, f_stop, n_pts)
     
     def load_kwargs_into_configs(self, **kwargs):
+        
+        if "configs" not in dir(self):
+            self.configs = {}
         
         # backwards compatability, lazy kwargs
         if "f_center" in kwargs:
@@ -182,7 +189,7 @@ class VNA_Keysight(BaseDriver):
             segment_type = 'homophasal'
         
         # load kwargs into vna configs
-        self.load_kwargs_into_configs(kwargs)
+        self.load_kwargs_into_configs(**kwargs)
         
         f_center = self.configs["f_center"]
         f_span = self.configs["f_span"]
@@ -262,8 +269,16 @@ class VNA_Keysight(BaseDriver):
         if measurements != 'NO CATALOG':
             self.write_check('CALC1:PARameter:DELete:ALL')
         
+        # turn it into a list or a set of s parameters
+        measure_sparams = self.config["sparam"]
+        if measure_sparams == "all" or "all" in measure_sparams:
+            measure_sparams = ['S11', 'S12', 'S21', 'S22']
+        elif not isinstance(measure_sparams, list):
+            measure_sparams = [measure_sparams]
+        
+        print(measure_sparams)
         # create measurements, create vna display windows, and set all of them to log format
-        for idx, sparam in enumerate(['S11', 'S12', 'S21', 'S22']):
+        for idx, sparam in enumerate(measure_sparams):
             self.write_check(f'CALC1:MEASure{idx+1}:DEFine \"{sparam}\"')
             self.write_check(f'CALC1:PAR:MNUM {idx+1}')  # select ch
             self.write_check(f'DISPlay:WINDow{idx+1} ON')  # create window
@@ -286,16 +301,16 @@ class VNA_Keysight(BaseDriver):
         
         # TODO: figure out how to set port1 and port2 both as inputs and outputs for s2p measurements 
         
-        raise NotImplemented
+        # raise NotImplemented
     
-        self.write_check(f'SOUR1:POW1 {self.configs["power"]}')
-        self.write_check(f'SENSe1:AVERage:STATe ON')
-        self.write_check(f'SENSe1:AVERage:Count {self.configs["averages"] // 1}')
-        self.write_check(f'SENSe1:BANDwidth {self.configs["if_bandwidth"]}HZ')
+        # self.write_check(f'SOUR1:POW1 {self.configs["power"]}')
+        # self.write_check(f'SENSe1:AVERage:STATe ON')
+        # self.write_check(f'SENSe1:AVERage:Count {self.configs["averages"] // 1}')
+        # self.write_check(f'SENSe1:BANDwidth {self.configs["if_bandwidth"]}HZ')
 
-        # autoscale for visibility on the display
-        self.write_check(f'DISPlay:WINDow1:TRACe1:Y:SCAle:AUTO')
-        self.write_check(f'DISPlay:WINDow2:TRACe1:Y:SCAle:AUTO')
+        # # autoscale for visibility on the display
+        # self.write_check(f'DISPlay:WINDow1:TRACe1:Y:SCAle:AUTO')
+        # self.write_check(f'DISPlay:WINDow2:TRACe1:Y:SCAle:AUTO')
 
 
     def setup_measurement(self, Expt_Config=None):

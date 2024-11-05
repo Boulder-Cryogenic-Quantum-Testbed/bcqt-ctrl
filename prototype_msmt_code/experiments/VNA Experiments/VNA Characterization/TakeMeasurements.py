@@ -51,41 +51,32 @@ PNA_X = VNA_Keysight(VNA_Keysight_InstrConfig, debug=True)
 
 # %%
 
-Expt_Config = {
-    "points" : 10000,
-    "span" : 100e6,
-    "if_bandwidth" : 1000,
-    "power" : -30,
-    "edelay" : 76.36,
-    "averages" : 2,
-    "sparam" : 'S21',
+DefaultConfig = {
+    "n_pts" : 20001,
+    "f_start" : 4e9,
+    "f_stop" : 8e9,
+    "if_bandwidth" : 5000,
+    "power" : -20,
+    "edelay" : 0,
+    "averages" : 10,
+    "sparam" : 'all',
     
-    # "segment_type" : "homophasal",
-    # "segment_type" : "hybrid",
     "segment_type" : "linear",
-    
-    "Noffres" : 15
 }
 
 # %%
 
-def TakeMeasurement(VNA, experiment_name, data_dir=None):
+def SetupMeasurement(VNA, data_dir=None):
+    VNA.set_instr_params(DefaultConfig)
+    VNA.get_instr_params()
+    VNA.setup_s2p_measurement()
     
-    #########################
+def TakeData(VNA):
     
-    if not isinstance(data_dir, Path):
-        data_dir = Path(data_dir)
+    VNA.check_instr_error_queue()
+    VNA.acquire_trace()
     
-    Expt_Config["segments"] = PNA_X.compute_homophasal_segments(**Expt_Config)
-
-    PNA_X.set_instr_params(Expt_Config)
-    PNA_X.get_instr_params()
-    PNA_X.setup_measurement()
-    
-    PNA_X.check_instr_error_queue()
-    PNA_X.acquire_trace()
-    
-    freqs, magn_dB, phase_deg = PNA_X.return_data()
+    freqs, magn_dB, phase_deg = VNA.return_data()
     
     #########################
     
@@ -112,8 +103,13 @@ def TakeMeasurement(VNA, experiment_name, data_dir=None):
 
     #########################
 
-
-def LoadMeasurement(csv_path):
+def Get_Data(VNA):
+    
+    
+    
+def Save_Measurement(VNA, experiment_name, csv_path, ):
+    if not isinstance(data_dir, Path):
+        data_dir = Path(data_dir)
     
     return 
 #% %
