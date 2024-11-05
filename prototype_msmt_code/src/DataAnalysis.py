@@ -25,7 +25,7 @@ import fit_resonator.fit as fsd
 
 # DataResults Class
 class DataAnalysis():
-    def __init__(self, processed_data, dstr):
+    def __init__(self, processed_data, dstr=None):
         """
             for now, processed_data is just a weird dictionary:
             
@@ -48,7 +48,11 @@ class DataAnalysis():
         
         """
         self.data = processed_data
-        self.dstr = dstr
+        
+        if dstr is not None:
+            self.dstr = dstr
+        else:
+            self.dstr = datetime.today().strftime("%m_%d_%I%M%p")
         
     def display_results(self):
         print(f"Displaying results: {self.processed_data}")

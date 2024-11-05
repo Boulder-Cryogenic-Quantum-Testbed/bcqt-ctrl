@@ -31,28 +31,38 @@ import time, sys
 
 
 dstr = datetime.today().strftime("%m_%d_%I%M%p")
-current_dir = Path(".")
+current_path = Path(".")
 script_filename = Path(__file__).stem
 
-src_path = Path(r"..\..\src")
-driver_path = src_path / "drivers"
-data_path = current_dir / "data" / dstr / script_filename 
+msmt_code_path = Path(r"../..").resolve()
+experiment_path = Path("..").resolve()
+src_path = msmt_code_path / "src"
+driver_path = msmt_code_path / "drivers"
+instr_path = driver_path / "instruments"
+data_path = current_path / "data" / script_filename / dstr 
 csv_path = data_path / "raw_csvs"
+dcm_path = data_path / "dcm_fits"
 
+# all_paths = [current_dir, experiment_path, msmt_code_path, src_path, driver_path, instr_path, data_path, csv_path, dcm_path]
+
+# grab all the variables in the local space with "path" in it and save into dict
+all_paths_dict = {k:v for k, v in locals().items() if isinstance(v, Path)}
+
+# %%
 
 # make sure all paths exist, then append to $PATH
-for path in [src_path, driver_path, data_path, csv_path]:
-    print(f"Checking if path exists:  ['{path}']")
-    path = path.absolute()  # convert relative Path objs to absolutes
-    print(f"     {str(path.exists()).upper()}")
+for path_name, path in all_paths_dict.items():
+    path = path.resolve()  # convert relative Path objs to absolutes
+    print(f"Checking if path [{path_name}] exists:  ['{path}']")
+    print(f"             {str(path.exists()).upper()}\n")
     
     # ensure our data/fit storage paths exists
-    if path.exists() is False and path in [csv_path.absolute(), data_path.absolute()]:
+    if path.exists() is False and path in [csv_path.absolute(), data_path.absolute(), dcm_path.absolute()]:
         path.mkdir(parents=True, exist_ok=True)
         print(f"       ->  Created! Path now exists. [{path.exists() = }]")
     
     sys.path.append(str(path))
-    
+
 
 # %%
 from VNA_Keysight import VNA_Keysight
@@ -75,12 +85,13 @@ SA_RnS_InstrConfig = {
     "instr_address" : 'GPIB::20::INSTR',      
 }
 
+
 SG_Anritsu_InstrConfig = {
     "instrument_name" : "SG_Anritsu",
     # "rm_backend" : "@py",
     "rm_backend" : None,
-    "instr_address" : 'GPIB::8::INSTR',  # test instr
-    # "instr_address" : 'GPIB::9::INSTR',  # twpa
+    "instr_address" : 'GPIB::7::INSTR',  # test instr
+    # "instr_address" : 'GPIB::8::INSTR',  # twpa
 }
 
 # %% initialize instruments
@@ -101,8 +112,8 @@ all_instr = [PNA_X, SIG_Generator, SIG_Analyzer]
 #     instr.return_instrument_parameters(print_output=True)
 
 # %%
-SIG_Generator.set_freq(4.6e9)
-SIG_Generator.set_power(-30)
+SIG_Generator.set_freq(4.909e9)
+SIG_Generator.set_power(-17)
 SIG_Generator.set_output(True)
 
 SIG_Analyzer.set_freq_center_Hz(5.0e9)
