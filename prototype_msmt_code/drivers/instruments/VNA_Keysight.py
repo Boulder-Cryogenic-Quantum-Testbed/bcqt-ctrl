@@ -71,12 +71,10 @@ class VNA_Keysight(BaseDriver):
         if_bandwidth = self.configs["if_bandwidth"]
         edelay = self.configs["edelay"]
         sparam = self.configs["sparam"]
-        if "f_center" in self.configs:
-            
-            f_center = self.configs["f_center"]
-            f_span = self.configs["f_span"]
-        elif "f_start" in self.config:
-            
+        
+        # TODO: check for f_center/f_span vs f_start/f_stop
+        f_center = self.configs["f_center"]
+        f_span = self.configs["f_span"]
         
         all_params = { 
                      "power" : power , 
@@ -117,38 +115,49 @@ class VNA_Keysight(BaseDriver):
         pass
     
     
-    def get_frequency_bounds(self, ):
-        return NotImplemented
-    
-    def set_frequency_bounds(self):
+    def determine_frequency_bounds(self):
         
         """
-            Get f_center and f_span, or f_start and f_stop,
-                and return an array with number of points.
-                
-            Also, save whichever set we didn't start with 
-                into the instrument configs
+            Search configs for f_center/f_span, or f_start/f_stop,
+                and then make sure that both pairs of values are
+                saved to the config. Additionally return
         """
         
+        # check for old variable names
         if "fc" in self.configs:
-            self.print_console("Found 'fc' in configs-  switch to using f_center!")
+            self.print_console("Found 'fc' in configs-  switch to f_center!")
             self.configs["f_center"] = self.configs["fc"]
             del self.configs["fc"]   # remove bad config label
         
+        
+        # get bounds by looking for f_center/f_span or f_start/f_stop!
         if "f_center" in self.configs and "f_span" in self.configs:
+            f_center, f_span = self.configs["f_center"], self.configs["f_span"]
+            
             f_half_span = self.configs["f_span"] / 2
             f_start = self.configs["f_center"] - f_half_span
             f_stop = self.configs["f_center"] + f_half_span
-            self.configs["f_start"], self.configs["f_stop"] = f_start, f_stop
             
         elif "f_start" in self.configs and "f_stop" in self.configs:
             f_start, f_stop = self.configs["f_start"], self.configs["f_stop"]
+            
             f_span = f_stop - f_start
-            self.configs["f_center"] = f_start + f_span/2
-            self.configs["f_span"] = f_span
+            f_center = f_start + f_span/2
+            
+        # set values in config and return a dict for convenience
+        self.configs["f_start"] = f_start
+        self.configs["f_stop"] = f_stop
+        self.configs["f_center"] = f_center
+        self.configs["f_span"] = f_span
         
-        # n_pts = self.configs["n_pts"]
-        # np.linspace(f_start, f_stop, n_pts)
+        freq_bounds = {
+            "f_start" : f_start,
+            "f_stop" : f_stop,
+            "f_center" : f_center,
+            "f_span" : f_span,
+        }
+        
+        return freq_bounds
     
     def load_kwargs_into_configs(self, **kwargs):
         
