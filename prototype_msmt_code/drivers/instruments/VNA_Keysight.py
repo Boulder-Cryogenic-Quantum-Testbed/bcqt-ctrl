@@ -40,58 +40,105 @@ class VNA_Keysight(BaseDriver):
     
     def set_instr_params(self, InstrConfig_Dict=None):
         
+        ########################################################
+        ########################################################
+        #### first update config dict:
+        ####    has extra logic for checking if new configs
+        ####    already exist, and runs some other methods
+        ####    to assist with proper configuration
+        ########################################################
+        ########################################################
+        
+        # if None was passed, just set configs = existing configs
         if InstrConfig_Dict is None:
-            configs = self.instr_config
+            configs = self.configs
         else:
             configs = InstrConfig_Dict
         
-        self.configs = configs
+        # check if new configs match old configs, and if so, overwrite
+        # if they don't match, overwrite anyway, but print mismatches
+        if self.configs.keys() == configs.keys():
+            self.print_debug("set_instr_params: new config has the same keys as existing config, overwriting entries")
+            self.configs = configs
+        else:
+            # check every key in one list against all keys in the other list, announce keys that are new
+            old_keys, new_keys = self.configs.keys(), configs.keys()
+            for new in new_keys:
+                if new not in old_keys:
+                    self.print_debug(f"set_instr_params: [new_key={new}] not found in existing config dict! Adding to configs")
+                else:
+                    self.print_debug(f"set_instr_params: [new_key={new}] already in config with value [{self.configs[new]}. Overwriting with [{configs[new]}]")
+                
+                self.configs[new] = configs[new]
+                
+        ############################
+        #### freq bounds
+        ############################
+        freq_bounds = self.determine_frequency_bounds()
+        self.add_kwargs_and_filter_configs(**freq_bounds)
         
-        # TODO: do this better
-        # self.configs.power = configs["power"] 
-        # self.configs.f_center = configs["f_center"] 
-        # self.configs.span = configs["f_span"] 
-        # self.configs.n_pts = configs["n_pts"] 
-        # self.configs.averages = configs["averages"] 
-        # self.configs.if_bandwidth = configs["if_bandwidth"] 
-        # self.configs.edelay = configs["edelay"] 
-        # self.configs.sparam = configs["sparam"] 
+        ############################
+        #### sparam
+        ############################
+        if "sparam" in self.configs:
+            measure_sparams = self.configs["sparam"]
+        elif "sparams" in self.configs:
+            measure_sparams = self.configs["sparam"]
+        # check if value is 'all' as shortcut for all sparameters
+        if "all" in self.configs or "all" in measure_sparams:
+            measure_sparams = ['S11', 'S12', 'S21', 'S22']
+        # turn sparam into a list 
+        if not isinstance(measure_sparams, list):
+            measure_sparams = [measure_sparams]
+        # save to configs
+        self.configs["sparams"] = measure_sparams
+        
         
     
     def get_instr_params(self):
         
-        if hasattr(self, "configs") is not True:
-            # TODO: make a warning feature
-            self.print_console("get_instr_params called without having configured any parameters", prefix="[WARNING]")
-            return None
+        """ 
+            this method doesnt make any sense as it is - why not just get self.configs?
+            the only way it should exist is if it actually asks the instrument what
+            its parameters are, and that's what 'return_instrument_parameters' is for
+        """
+    
+        # if hasattr(self, "configs") is not True:
+        #     # TODO: make a warning feature
+        #     self.print_console("get_instr_params called without having configured any parameters", prefix="[WARNING]")
+        #     return None
         
-        power = self.configs["power"]
-        n_pts = self.configs["n_pts"]
-        averages = self.configs["averages"]
-        if_bandwidth = self.configs["if_bandwidth"]
-        edelay = self.configs["edelay"]
-        sparam = self.configs["sparam"]
+        # power = self.configs["power"]
+        # n_pts = self.configs["n_pts"]
+        # averages = self.configs["averages"]
+        # if_bandwidth = self.configs["if_bandwidth"]
+        # edelay = self.configs["edelay"]
+        # sparam = self.configs["sparam"]
         
-        # TODO: check for f_center/f_span vs f_start/f_stop
-        f_center = self.configs["f_center"]
-        f_span = self.configs["f_span"]
+        # # TODO: check for f_center/f_span vs f_start/f_stop
+        # f_center = self.configs["f_center"]
+        # f_span = self.configs["f_span"]
         
-        all_params = { 
-                     "power" : power , 
-                     "f_center" : f_center , 
-                     "f_span" : f_span , 
-                     "n_pts" : n_pts , 
-                     "averages" : averages , 
-                     "if_bandwidth" : if_bandwidth , 
-                     "edelay" : edelay , 
-                     "sparam" : sparam ,
-                    }
+        # all_params = { 
+        #              "power" : power , 
+        #              "f_center" : f_center , 
+        #              "f_span" : f_span , 
+        #              "n_pts" : n_pts , 
+        #              "averages" : averages , 
+        #              "if_bandwidth" : if_bandwidth , 
+        #              "edelay" : edelay , 
+        #              "sparam" : sparam ,
+        #             }
         
-        for k, v in all_params.items():
-            self.print_console(f" {k} = {v}")
+        # for k, v in all_params.items():
+        #     self.print_console(f" {k} = {v}")
         
-        return all_params
+        # for k, v in self.configs.items():
+        #     self.print_console(f" {k} = {v}")
         
+        # return configs
+        
+        raise NotImplemented("Not implemented, needs to call all 'get_xyz_param' methods")
         
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     # ~~~  Instr Methods
@@ -116,31 +163,25 @@ class VNA_Keysight(BaseDriver):
     
     
     def determine_frequency_bounds(self):
-        
         """
             Search configs for f_center/f_span, or f_start/f_stop,
                 and then make sure that both pairs of values are
                 saved to the config. Additionally return
         """
-        
         # check for old variable names
         if "fc" in self.configs:
             self.print_console("Found 'fc' in configs-  switch to f_center!")
             self.configs["f_center"] = self.configs["fc"]
             del self.configs["fc"]   # remove bad config label
-        
-        
+        self.add_kwargs_and_filter_configs()
         # get bounds by looking for f_center/f_span or f_start/f_stop!
         if "f_center" in self.configs and "f_span" in self.configs:
             f_center, f_span = self.configs["f_center"], self.configs["f_span"]
-            
             f_half_span = self.configs["f_span"] / 2
             f_start = self.configs["f_center"] - f_half_span
             f_stop = self.configs["f_center"] + f_half_span
-            
         elif "f_start" in self.configs and "f_stop" in self.configs:
             f_start, f_stop = self.configs["f_start"], self.configs["f_stop"]
-            
             f_span = f_stop - f_start
             f_center = f_start + f_span/2
             
@@ -159,27 +200,31 @@ class VNA_Keysight(BaseDriver):
         
         return freq_bounds
     
-    def load_kwargs_into_configs(self, **kwargs):
+    
+    def add_kwargs_and_filter_configs(self, **kwargs):
+        self.print_console(f"Adding the following kwargs to the configs:  \n{kwargs}")
+        self.configs = {**self.configs, **kwargs}
         
-        if "configs" not in dir(self):
-            self.configs = {}
+        # backwards compatability, remove lazy kwargs
+        if "fc" in self.configs:
+            self.configs["f_center"] = self.configs["fc"]
+            del self.configs["fc"]
+        if "span" in self.configs:
+            self.configs["f_span"] = self.configs["f_span"]
+            del self.configs["f_span"]
+        for name in ["n_pts", "points", "n_points"]:
+            if name in self.configs:
+                self.configs["n_pts"] = self.configs[name]
+                del self.configs["n_pts"]
         
-        # backwards compatability, lazy kwargs
-        if "f_center" in kwargs:
-            self.configs["f_center"] = kwargs["f_center"]
-            del kwargs["f_center"]
-        if "fc" in kwargs:
-            self.configs["f_center"] = kwargs["fc"]
-            del kwargs["fc"]
-        if "f_span" in kwargs:
-            self.configs["f_span"] = kwargs["f_span"]
-            del kwargs["f_span"]
-        if "n_pts" in kwargs:
-            self.configs["n_pts"] = kwargs["n_pts"]
-            del kwargs["n_pts"]
+        # check all kwargs if their equivalent without underscores exists
+        #   e.g. check if 'fstart' exists, then replace it with 'f_start'
+        for name in self.configs: 
+            name_pruned = name.replace("_","")
+            if name_pruned in self.configs:
+                self.configs[name] = self.configs[name_pruned]
+                del self.configs[name_pruned]
         
-        if len(kwargs) >= 1:
-            self.print_console(f"Loaded all kwargs except for these remaining:\n    {kwargs}")
         
     def compute_homophasal_segments(self, Noffres=None, segment_type=None, **kwargs):
         """
@@ -198,7 +243,7 @@ class VNA_Keysight(BaseDriver):
             segment_type = 'homophasal'
         
         # load kwargs into vna configs
-        self.load_kwargs_into_configs(**kwargs)
+        self.add_kwargs_and_filter_configs(**kwargs)
         
         f_center = self.configs["f_center"]
         f_span = self.configs["f_span"]
@@ -279,7 +324,7 @@ class VNA_Keysight(BaseDriver):
             self.write_check('CALC1:PARameter:DELete:ALL')
         
         # turn it into a list or a set of s parameters
-        measure_sparams = self.config["sparam"]
+        measure_sparams = self.configs["sparam"]
         if measure_sparams == "all" or "all" in measure_sparams:
             measure_sparams = ['S11', 'S12', 'S21', 'S22']
         elif not isinstance(measure_sparams, list):
@@ -296,7 +341,7 @@ class VNA_Keysight(BaseDriver):
             self.write_check(f'CALC1:MEASure{idx+1}:FORMat MLOGarithmic')
             
         # set frequency sweep
-        if self.configs["segments"] is not None:
+        if "segments" in self.configs and self.configs["segments"] is not None:
             num_segments = len(self.configs["segments"])
             seg_data = ''.join([s for s in self.configs["segments"]])
             self.write_check(f"SENSe1:SWEep:TYPE SEGment")
@@ -469,7 +514,7 @@ class VNA_Keysight(BaseDriver):
         """
             Transfer data from VNA to PC
         """
-        if self.configs["segments"] is not None:
+        if "segments" in self.configs and self.configs["segments"] is not None:
             # Read the list of all segments
             freqs = np.array([])
             for s in self.configs["segments"]:
@@ -486,19 +531,24 @@ class VNA_Keysight(BaseDriver):
             gpoints = int(self.query_check(f'SENSe1:SWEep:POINts?'))
             freqs = np.linspace(float(self.query_check('SENSe1:FREQuency:START?')),
                     float(self.query_check('SENSe1:FREQuency:STOP?')), gpoints)
-                        
-        # read in magn
-        self.write_check('CALC1:PAR:MNUM 1')  # select ch 1, meas 1
-        self.write_check('CALC1:FORMat MLOG')
-        magn = self.query_ascii_values('CALC1:DATA? FDATA', container=np.array)
-
-        # read in phase
-        self.write_check('CALC1:PAR:MNUM 2')  # select ch 1, meas 2
-        self.write_check('CALC1:FORMat PHASe')
-        self.write_check('DISPlay:WINDow2:Y:AUTO')
-        phase = self.query_ascii_values('CALC1:DATA? FDATA', container=np.array)
-
         
+        all_data = []
+        for idx, sparam in enumerate(self.configs["sparam"]):
+                
+            # read in magn
+            self.write_check('CALC1:PAR:MNUM 1')  # select ch 1, meas 1
+            self.write_check('CALC1:FORMat MLOG')
+            magn = self.query_ascii_values('CALC1:DATA? FDATA', container=np.array)
+
+            # read in phase
+            self.write_check('CALC1:PAR:MNUM 2')  # select ch 1, meas 2
+            self.write_check('CALC1:FORMat PHASe')
+            self.write_check('DISPlay:WINDow2:Y:AUTO')
+            phase = self.query_ascii_values('CALC1:DATA? FDATA', container=np.array)
+
+            data_dict = 
+
+            
         return freqs, magn, phase
     
     
@@ -517,11 +567,11 @@ class VNA_Keysight(BaseDriver):
         # self.print_debug("Taking Single Trace")
         
         # TODO: separate "instr_config" and "expt_config"
-        # if self.instr_config is None and Expt_Config is not None: 
+        # if self.configs is None and Expt_Config is not None: 
         #     self.print_debug("Updating ExptConfig")
-        #     self.instr_config = Expt_Config
+        #     self.configs = Expt_Config
         #
-        # self.instr_config["segments"] = self.compute_homophasal_segments(**self.instr_config)
+        # self.configs["segments"] = self.compute_homophasal_segments(**self.configs)
         # self.set_instr_params(Expt_Config)
         # self.get_instr_params()
         # self.setup_measurement()
