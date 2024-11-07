@@ -3,6 +3,11 @@
     Test implementation of VNA driver
 """
 
+%load_ext autoreload
+%autoreload 2
+
+# %%
+
 from pathlib import Path
 from datetime import datetime
 import sys
@@ -22,11 +27,8 @@ experiment_path = Path("..").resolve()
 src_path = msmt_code_path / "src"
 driver_path = msmt_code_path / "drivers"
 instr_path = driver_path / "instruments"
-data_path = current_dir / "data" / script_filename / dstr 
 
-data_path.mkdir(parents=True, exist_ok=True)
-
-all_paths = [current_dir, experiment_path, msmt_code_path, src_path, driver_path, instr_path, data_path]
+all_paths = [current_dir, experiment_path, msmt_code_path, src_path, driver_path, instr_path]
 
 # make sure all paths exist, then append to $PATH
 for path in all_paths:
@@ -51,19 +53,6 @@ PNA_X = VNA_Keysight(VNA_Keysight_InstrConfig, debug=True)
 
 # %%
 
-DefaultConfig = {
-    "n_pts" : 20001,
-    "f_start" : 4e9,
-    "f_stop" : 8e9,
-    "if_bandwidth" : 5000,
-    "power" : -20,
-    "edelay" : 0,
-    "averages" : 10,
-    "sparam" : 'all',
-    
-    "segment_type" : "linear",
-}
-
 # %%
 
 """ 
@@ -80,71 +69,103 @@ DefaultConfig = {
              .
         4) Archive_Results() will get the results from the VNA and save to a specified location with
             appropriate metadata.
-
 """
 
-def Reset_VNA(VNA, **kwargs):
+def Reset_VNA(VNA, config, **kwargs):
     """
         Resets the VNA to default configs, then passes any kwargs to the configs,
         and then sets up the s2p measurement.
     """
-    VNA.set_instr_params(DefaultConfig)
+    VNA.check_instr_error_queue()
+    VNA.set_instr_params(config)
     VNA.get_instr_params()
-    VNA.add_kwargs_and_filter_configs(**kwargs)
-    VNA.setup_s2p_measurement()
     
     
-def Take_Data(VNA):
+def Make_Measurement(VNA, **kwargs):
     """
-        instruct VNA to acquire data and return it in freqs/magn/phase
+        instruct VNA to do error checks, add configs, and perform measurement
+    """
+    VNA.setup_s2p_measurement()
+    VNA.add_kwargs_and_filter_configs(**kwargs)
+    VNA.check_instr_error_queue()
+    VNA.acquire_trace()
+    
+def Acquire_Trace(VNA, plot_complex=True):
+    """
+        Should take zero time, only asks VNA to send the data it has
+        
         
         returns:
             df = pandas dataframe of acquired data
                  eight columns of magn/phase scattering parameters
+    
     """
+    data_dict = VNA.return_data_s2p()
     
-    VNA.check_instr_error_queue()
-    VNA.acquire_trace()
-    
-    freqs, magn_dB, phase_deg = VNA.return_data()
-    
-    #########################
-    # plot data with helper function
-    df, fig, axes = qh.plot_data_with_pandas(freqs, magn_dB, phase_deg=phase_deg)
+    all_dfs = {}
+    for sparam, (freqs, magn_dB, phase_rad) in data_dict.items():
+        #########################
+        # plot data with helper function
+        df, fig, axes = qh.plot_data_with_pandas(freqs, magn_dB, phase_rad=phase_rad, plot_complex=plot_complex)
 
-    # add datetime to first row for archive
-    first_row = {col : val for col, val in zip(df.cols, [datetime.datetime()]*len(df.cols))}
-    datetime_row = pd.DataFrame(first_row, index=["datetime.now()"])
-    df = pd.concat([datetime_row, df.iloc[:]])
-    
-    title_str = str(f"{VNA.config["f_span"]/1e6:1.2f}MHz_span_{VNA.config["averages"]}_avgs_{VNA.config["if_bandwidth"]}_IFBW_{VNA.config["power"]}_dBm")
-    fig = axes["A"].get_figure()
-    fig.suptitle(title_str, size=16)
-    fig.tight_layout()
-    
-    # fc, span, ifbw, avg, power = Expt_Config["fc"], Expt_Config["span"], Expt_Config["if_bandwidth"], Expt_Config["averages"], Expt_Config["power"]
+        # add datetime to first row for archive
+        first_row = {col : val for col, val in zip(df.columns, [datetime.now()]*len(df.columns))}
+        datetime_row = pd.DataFrame(first_row, index=["datetime.now()"])
+        df = pd.concat([datetime_row, df.iloc[:]])
+        
+        # title_str = str(f"{VNA.configs["f_span"]/1e6:1.2f}MHz_span_{VNA.configs["averages"]}_avgs_{VNA.configs["if_bandwidth"]}_IFBW_{VNA.configs["power"]}_dBm")
+        title_str = sparam
+        fig = axes["A"].get_figure()
+        fig.suptitle(title_str, size=32)
+        fig.tight_layout()
+        
+        # fc, span, ifbw, avg, power = Expt_Config["fc"], Expt_Config["span"], Expt_Config["if_bandwidth"], Expt_Config["averages"], Expt_Config["power"]
 
-    return df
-    #########################
+        all_dfs[sparam] = df
+        
+    
+    
+    return all_dfs
+        #########################
 
-def Archive_Data(VNA, df, experiment_name, save_dir="./data"):
+def Archive_Data(VNA, all_dfs:list, expt_name:str, expt_category:str = '', save_dir:str = "./data"):
     # check if save_dir is a path or string
     if not isinstance(save_dir, Path):
         save_dir = Path(save_dir)
     
     # check if save_dir exists
     if not save_dir.exists():
-        VNA.print_console(f"Creating directory {save_dir} for {experiment_name}")
+        VNA.print_console(f"Creating directory {save_dir} under category {expt_category}")
+        if expt_category not in save_dir:
+            save_dir = save_dir / expt_category
         save_dir.mkdir(exist_ok=True, parents=True)
     
     # append number to end of filename and save to csv
     expt_no = len(save_dir.glob("*.csv")) + 1    
-    filename = str(save_dir / f"{experiment_name}_{expt_no:03d}.csv")
+    filename = str(save_dir / f"{expt_name}_{expt_no:03d}.csv")
+    VNA.print_console(f"Saving data as {filename.name}")
+    
     df.to_csv(filename)
     
     return df
 
     #########################
+# %% set default values
+
+DefaultConfig = {
+    "n_points" : 20001,
+    "f_start" : 4e9,
+    "f_stop" : 8e9,
+    "if_bandwidth" : 5000,
+    "power" : -20,
+    "edelay" : 0,
+    "averages" : 10,
+    "sparam" : 'all',
+    
+    "segment_type" : "linear",
+}
+
+PNA_X.set_instr_params(DefaultConfig)
 
 # %% example usage
 
@@ -152,17 +173,19 @@ Measurement_Configs = {
     "f_start" : 2e9,
     "f_stop" : 10e9,
     "n_pts" : 2001,
-    "if_bw" : 5000,
+    "if_bw" : 15000,
     "power" : -20,
     
     # by default, sparam = 'all', edelay = 0, averages = 10
 }
 
-expt_name = "Test_Measurement"
+expt_category = "TestCode"
+meas_name = "Attenuator_With_Thru"
 
-Reset_VNA(PNA_X, **Measurement_Configs)
-Take_Data(PNA_X)
-
+Reset_VNA(PNA_X, Measurement_Configs)
+Make_Measurement(PNA_X)
+all_dfs = Acquire_Trace(PNA_X, plot_complex=False)
+Archive_Data(PNA_X, all_dfs, expt_category, meas_name)
 
 
 # %%
