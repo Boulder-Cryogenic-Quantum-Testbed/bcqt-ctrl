@@ -13,7 +13,7 @@ def unpack_df(df):
     phase_rad = df["Phase [rad]"]
     return freqs, magn_dB, phase_rad
 
-def plot_data_with_pandas(freqs, magn_dB, phase_deg=None, phase_rad=None, ax=None, **kwargs):
+def plot_data_with_pandas(freqs, magn_dB, phase_deg=None, phase_rad=None, ax=None, plot_complex=True, **kwargs):
 
     # check phase input
     if phase_rad is None and phase_deg is not None:
@@ -33,7 +33,7 @@ def plot_data_with_pandas(freqs, magn_dB, phase_deg=None, phase_rad=None, ax=Non
         if phase_rad != np.deg2rad(phase_deg):
             raise ValueError(f"Both radians and degrees were given, but they don't match!\n  {phase_rad != np.deg2rad(phase_deg) = }")
         
-    df = pd.DataFrame.from_dict(data={"Frequency":freqs, "S21 [dB]":magn_dB, "Phase [rad]":phase_rad}, orient="columns")
+    df = pd.DataFrame.from_dict(data={"Frequency":freqs, f"magn_dB":magn_dB, "phase_rad":phase_rad}, orient="columns")
     
     ## convert dataset
     magn_lin = 10**(magn_dB/20)
@@ -50,7 +50,7 @@ def plot_data_with_pandas(freqs, magn_dB, phase_deg=None, phase_rad=None, ax=Non
         # only plot complex portion, then return early
         ax3 = ax
         fig = ax3.get_figure()
-        
+    
     ax3.plot(real, imag, 'o', markersize=6, **kwargs)
     ax3.set_ylabel("Imag")
     ax3.set_title("Real vs Imag")
@@ -58,6 +58,9 @@ def plot_data_with_pandas(freqs, magn_dB, phase_deg=None, phase_rad=None, ax=Non
     ax3.axvline(0, linestyle=':', linewidth=1, color='k')
     ax3.set_aspect("equal")
     
+    if plot_complex is False:
+        fig.delaxes(ax3)
+        
     if ax is not None:
         fig.tight_layout()
         return df, fig, [ax3]
@@ -78,6 +81,8 @@ def plot_data_with_pandas(freqs, magn_dB, phase_deg=None, phase_rad=None, ax=Non
 
     ax1.set_ylabel("S21 [dB]")
     ax2.set_ylabel("Phase [Rad]")
+    
+        
     fig.tight_layout()
 
     
