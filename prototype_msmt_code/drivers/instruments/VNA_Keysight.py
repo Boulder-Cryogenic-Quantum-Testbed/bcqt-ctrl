@@ -7,6 +7,7 @@ import time
 
 from BaseDriver import BaseDriver
 
+import pandas as pd
 
 
 class VNA_Keysight(BaseDriver):
@@ -38,6 +39,33 @@ class VNA_Keysight(BaseDriver):
     # ~~~  get/set Instr Parameters
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     
+    def set_scattering_parameters(self):
+        """
+            look inside configs for s-param definition, and make sure that
+                they are valid + are in a list, especially if there is only
+                one s-parameter.
+             
+            also parses 'all' to all four s parameters.
+        """
+        if "sparam" in self.configs:
+            measure_sparam = self.configs["sparam"]
+        elif "sparams" in self.configs:
+            measure_sparam = self.configs["sparams"]
+            del self.configs["sparams"]
+            
+        # check if value is 'all' as shortcut for all sparameters
+        if "all" in measure_sparam:
+            measure_sparam = ['S11', 'S12', 'S21', 'S22']
+            
+        # turn sparam into a list 
+        if not isinstance(measure_sparam, list):
+            measure_sparam = [measure_sparam]
+            
+        # overwrite configs
+        self.configs["sparam"] = measure_sparam
+        return measure_sparam
+    
+    # TODO: set_instr_params vs add_filter_kwargs are redundant
     def set_instr_params(self, InstrConfig_Dict=None):
         
         ########################################################
@@ -48,6 +76,10 @@ class VNA_Keysight(BaseDriver):
         ####    to assist with proper configuration
         ########################################################
         ########################################################
+        
+        # create an empty config dict if none exist
+        if "configs" not in dir(self):
+            self.configs = {}
         
         # if None was passed, just set configs = existing configs
         if InstrConfig_Dict is None:
@@ -65,33 +97,24 @@ class VNA_Keysight(BaseDriver):
             old_keys, new_keys = self.configs.keys(), configs.keys()
             for new in new_keys:
                 if new not in old_keys:
-                    self.print_debug(f"set_instr_params: [new_key={new}] not found in existing config dict! Adding to configs")
+                    self.print_debug(f"set_instr_params: '{new} not found in existing config dict! Adding to configs")
                 else:
-                    self.print_debug(f"set_instr_params: [new_key={new}] already in config with value [{self.configs[new]}. Overwriting with [{configs[new]}]")
+                    self.print_debug(f"set_instr_params: '{new}' already in config with value [{self.configs[new]}. Overwriting with [{configs[new]}]")
                 
                 self.configs[new] = configs[new]
                 
+        ############################
+        #### s-parameters
+        ############################
+        self.print_debug("setting scattering params")
+        self.set_scattering_parameters()
+        
         ############################
         #### freq bounds
         ############################
         freq_bounds = self.determine_frequency_bounds()
         self.add_kwargs_and_filter_configs(**freq_bounds)
         
-        ############################
-        #### sparam
-        ############################
-        if "sparam" in self.configs:
-            measure_sparams = self.configs["sparam"]
-        elif "sparams" in self.configs:
-            measure_sparams = self.configs["sparam"]
-        # check if value is 'all' as shortcut for all sparameters
-        if "all" in self.configs or "all" in measure_sparams:
-            measure_sparams = ['S11', 'S12', 'S21', 'S22']
-        # turn sparam into a list 
-        if not isinstance(measure_sparams, list):
-            measure_sparams = [measure_sparams]
-        # save to configs
-        self.configs["sparams"] = measure_sparams
         
         
     
@@ -137,8 +160,8 @@ class VNA_Keysight(BaseDriver):
         #     self.print_console(f" {k} = {v}")
         
         # return configs
-        
-        raise NotImplemented("Not implemented, needs to call all 'get_xyz_param' methods")
+        return Exception("Not implemented, needs to call all 'get_xyz_param' methods")
+        # raise NotImplemented
         
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     # ~~~  Instr Methods
@@ -202,8 +225,9 @@ class VNA_Keysight(BaseDriver):
     
     
     def add_kwargs_and_filter_configs(self, **kwargs):
-        self.print_console(f"Adding the following kwargs to the configs:  \n{kwargs}")
-        self.configs = {**self.configs, **kwargs}
+        if len(kwargs) != 0:
+            self.print_console(f"Adding the following kwargs to the configs:  \n{kwargs}")
+            self.configs = {**self.configs, **kwargs}
         
         # backwards compatability, remove lazy kwargs
         if "fc" in self.configs:
@@ -219,12 +243,21 @@ class VNA_Keysight(BaseDriver):
         
         # check all kwargs if their equivalent without underscores exists
         #   e.g. check if 'fstart' exists, then replace it with 'f_start'
+        entries_to_remove = []
         for name in self.configs: 
-            name_pruned = name.replace("_","")
-            if name_pruned in self.configs:
-                self.configs[name] = self.configs[name_pruned]
-                del self.configs[name_pruned]
-        
+            if "_" in name:
+                name_pruned = name.replace("_","")
+                if name_pruned in self.configs:
+                    self.print_console("")
+                    self.configs[name] = self.configs[name_pruned]
+                    entries_to_remove.append(name_pruned)
+                
+        # double check that the sparam have been parsd
+        self.set_scattering_parameters()    
+    
+        # remove all
+        for k in entries_to_remove:
+            self.configs.pop(name_pruned)
         
     def compute_homophasal_segments(self, Noffres=None, segment_type=None, **kwargs):
         """
@@ -323,16 +356,11 @@ class VNA_Keysight(BaseDriver):
         if measurements != 'NO CATALOG':
             self.write_check('CALC1:PARameter:DELete:ALL')
         
-        # turn it into a list or a set of s parameters
-        measure_sparams = self.configs["sparam"]
-        if measure_sparams == "all" or "all" in measure_sparams:
-            measure_sparams = ['S11', 'S12', 'S21', 'S22']
-        elif not isinstance(measure_sparams, list):
-            measure_sparams = [measure_sparams]
+        # just in case they have not been set yet, but should be by set_instr_params()
+        measure_sparam = self.set_scattering_parameters()
         
-        print(measure_sparams)
         # create measurements, create vna display windows, and set all of them to log format
-        for idx, sparam in enumerate(measure_sparams):
+        for idx, sparam in enumerate(measure_sparam):
             self.write_check(f'CALC1:MEASure{idx+1}:DEFine \"{sparam}\"')
             self.write_check(f'CALC1:PAR:MNUM {idx+1}')  # select ch
             self.write_check(f'DISPlay:WINDow{idx+1} ON')  # create window
@@ -348,7 +376,7 @@ class VNA_Keysight(BaseDriver):
             self.write_check(f'SENSe1:SEGMent:LIST SSTOP, {num_segments}{seg_data}')
         else:
             self.write_check("SENSe1:SWEep:TYPE LINear")
-            self.write_check(f'SENSe1:SWEep:POINts {self.configs["n_pts"]}')
+            self.write_check(f'SENSe1:SWEep:POINts {self.configs["n_points"]}')
             self.write_check(f'SENSe1:FREQuency:CENTer {self.configs["f_center"]}HZ')
             self.write_check(f'SENSe1:FREQuency:SPAN {self.configs["f_span"]}HZ')
             self.write_check(f'SENSe1:SWEep:TIME:AUTO ON')
@@ -510,10 +538,37 @@ class VNA_Keysight(BaseDriver):
         self.write_check('INITiate:CONTinuous OFF')
 
 
+    # TODO: only written like this to not break previous scripts
+    #         need to fix across the board!!
     def return_data(self):
+
+        print("########################################################################")##")
+        print("########################################################################")#")
+        print("###############  return_data will be changed to return #################")
+        print("###############   a dict of all datasetes, instead of  #################")
+        print("###############       just (freqs, magn, phase)!!!     #################")
+        print("########################################################################")###")
+        print("########################################################################")###")
+        
+        data_dict = self.return_data_s2p()
+        
+        if len(data_dict) == 1:
+            sparam = data_dict.keys()  # only one key, probably s21
+            freqs, magn, phase = data_dict[sparam]
+        else:
+            print("called return_data but measuring more than one sparam... use return_data_s2p()")
+            return self.return_data_s2p()
+        
+        return freqs, magn, phase
+    
+    def return_data_s2p(self):
+        
         """
-            Transfer data from VNA to PC
+            Transfer data from VNA to PC, organized into a dict
+              with each key as the s-parameter and the value
+               equal to [freqs, magn_dB, phase_rad]
         """
+        
         if "segments" in self.configs and self.configs["segments"] is not None:
             # Read the list of all segments
             freqs = np.array([])
@@ -532,26 +587,37 @@ class VNA_Keysight(BaseDriver):
             freqs = np.linspace(float(self.query_check('SENSe1:FREQuency:START?')),
                     float(self.query_check('SENSe1:FREQuency:STOP?')), gpoints)
         
-        all_data = []
+        self.set_scattering_parameters()
+        
+        data_dict = {}
         for idx, sparam in enumerate(self.configs["sparam"]):
-                
+            self.print_debug(f"[{idx=}] measuring {sparam} from {self.configs["sparam"]}")
             # read in magn
-            self.write_check('CALC1:PAR:MNUM 1')  # select ch 1, meas 1
-            self.write_check('CALC1:FORMat MLOG')
-            magn = self.query_ascii_values('CALC1:DATA? FDATA', container=np.array)
-
-            # read in phase
-            self.write_check('CALC1:PAR:MNUM 2')  # select ch 1, meas 2
-            self.write_check('CALC1:FORMat PHASe')
-            self.write_check('DISPlay:WINDow2:Y:AUTO')
+            self.write_check(f'CALC1:PAR:MNUM {idx+1}')  # select ch 1, meas (idx+1)
+            self.write_check('CALC1:FORMat MLOG') # read in the magn_dB
+            magn_dB = self.query_ascii_values('CALC1:DATA? FDATA', container=np.array)
+            self.write_check('CALC1:FORMat UPHASe') # read in the unwrapped phase
             phase = self.query_ascii_values('CALC1:DATA? FDATA', container=np.array)
+            phase_rad = np.deg2rad(phase)
+                    
+            # possible to use CALC:DATA:MFD? "1,2,3,4" which returns traces 1->4
 
-            data_dict = 
-
+            # TODO: pandas dataframe?
+            data_dict[sparam] = [freqs, magn_dB, phase_rad]
+        
+        return data_dict
+    
+    def make_df(self, data_dict:list):
+        """
+            takes a dict of np.arrays of the form
+                "sparam" : [freq, magn, phase_rad]
+            aka the output of return_data_s2p
             
-        return freqs, magn, phase
-    
-    
+            and returns a single dataframe
+        """
+        
+        for sparam, [freqs, magn_dB, phase_rad] in data_dict:
+            
     
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     # ~~~  Instr Scripts
