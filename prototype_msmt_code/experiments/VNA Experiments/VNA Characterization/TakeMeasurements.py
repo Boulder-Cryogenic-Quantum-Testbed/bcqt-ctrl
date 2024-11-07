@@ -23,7 +23,7 @@ script_filename = Path(__file__).stem
 # lazy way to import modules - just append to path... TODO: fix via proper __init__.py :)
 
 msmt_code_path = Path(r"../../..").resolve()
-experiment_path = Path("..").resolve()
+experiment_path = Path("..").resolve().parent
 src_path = msmt_code_path / "src"
 driver_path = msmt_code_path / "drivers"
 instr_path = driver_path / "instruments"
@@ -50,8 +50,6 @@ VNA_Keysight_InstrConfig = {
 }
 
 PNA_X = VNA_Keysight(VNA_Keysight_InstrConfig, debug=True)
-
-# %%
 
 # %%
 
@@ -90,7 +88,7 @@ def Make_Measurement(VNA, **kwargs):
     VNA.check_instr_error_queue()
     VNA.acquire_trace()
     
-def Acquire_Trace(VNA, plot_complex=True):
+def Acquire_Trace(VNA, plot_complex=True, track_min=True):
     """
         Should take zero time, only asks VNA to send the data it has
         
@@ -100,54 +98,34 @@ def Acquire_Trace(VNA, plot_complex=True):
                  eight columns of magn/phase scattering parameters
     
     """
-    data_dict = VNA.return_data_s2p()
+    df = VNA.return_data_s2p()
+    axes = qh.plot_s2p_df(df, plot_complex, track_min)
     
-    all_dfs = {}
-    for sparam, (freqs, magn_dB, phase_rad) in data_dict.items():
-        #########################
-        # plot data with helper function
-        df, fig, axes = qh.plot_data_with_pandas(freqs, magn_dB, phase_rad=phase_rad, plot_complex=plot_complex)
-
-        # add datetime to first row for archive
-        first_row = {col : val for col, val in zip(df.columns, [datetime.now()]*len(df.columns))}
-        datetime_row = pd.DataFrame(first_row, index=["datetime.now()"])
-        df = pd.concat([datetime_row, df.iloc[:]])
-        
-        # title_str = str(f"{VNA.configs["f_span"]/1e6:1.2f}MHz_span_{VNA.configs["averages"]}_avgs_{VNA.configs["if_bandwidth"]}_IFBW_{VNA.configs["power"]}_dBm")
-        title_str = sparam
-        fig = axes["A"].get_figure()
-        fig.suptitle(title_str, size=32)
-        fig.tight_layout()
-        
-        # fc, span, ifbw, avg, power = Expt_Config["fc"], Expt_Config["span"], Expt_Config["if_bandwidth"], Expt_Config["averages"], Expt_Config["power"]
-
-        all_dfs[sparam] = df
-        
-    
-    
-    return all_dfs
+    return df, axes
         #########################
 
-def Archive_Data(VNA, all_dfs:list, expt_name:str, expt_category:str = '', save_dir:str = "./data"):
+def Archive_Data(VNA, s2p_df:pd.DataFrame, expt_name:str, expt_category:str = '', save_dir:str = "./data"):
     # check if save_dir is a path or string
     if not isinstance(save_dir, Path):
-        save_dir = Path(save_dir)
+        save_dir = Path(save_dir).absolute()
     
     # check if save_dir exists
     if not save_dir.exists():
-        VNA.print_console(f"Creating directory {save_dir} under category {expt_category}")
-        if expt_category not in save_dir:
-            save_dir = save_dir / expt_category
-        save_dir.mkdir(exist_ok=True, parents=True)
+        VNA.print_console(f"Creating category {expt_category}")
+        VNA.print_console(f"    under save directory {save_dir}")
+        if expt_category not in save_dir.parts:
+            file_dir = save_dir / expt_category
+        file_dir.mkdir(exist_ok=True, parents=True)
     
     # append number to end of filename and save to csv
-    expt_no = len(save_dir.glob("*.csv")) + 1    
-    filename = str(save_dir / f"{expt_name}_{expt_no:03d}.csv")
+    expt_no = len(list(save_dir.glob("*.csv"))) + 1    
+    filename = save_dir / f"{expt_name}_{expt_no:03d}.csv"
     VNA.print_console(f"Saving data as {filename.name}")
+    VNA.print_console(f"    under '{str(Path(*filename.parts[-6:-1]))}'")
     
-    df.to_csv(filename)
+    s2p_df.to_csv(filename)
     
-    return df
+    return filename
 
     #########################
 # %% set default values
@@ -184,8 +162,12 @@ meas_name = "Attenuator_With_Thru"
 
 Reset_VNA(PNA_X, Measurement_Configs)
 Make_Measurement(PNA_X)
-all_dfs = Acquire_Trace(PNA_X, plot_complex=False)
-Archive_Data(PNA_X, all_dfs, expt_category, meas_name)
+
+all_dfs, axes = Acquire_Trace(PNA_X, plot_complex=False)
+
+# %%
+
+filename = Archive_Data(PNA_X, all_dfs, expt_category, meas_name)
 
 
 # %%

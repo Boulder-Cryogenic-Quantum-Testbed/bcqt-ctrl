@@ -33,21 +33,21 @@ class BaseDriver():
           
         # full reset of the instrument, write manually without checking
 
-        # self.write_check("*CLS")    # clears status register and error queue of instrument
-        # self.write_check("*RST")    # resets to factory default state
-        # self.write_check("*ESE 1")  # resets the event status registry for *ESR? loops 
-        #                             #    -> (see the 'send_cmd_and_wait()' method )
+        self.write_check("*CLS")    # clears status register and error queue of instrument
+        self.write_check("*RST")    # resets to factory default state
+        self.write_check("*ESE 1")  # resets the event status registry for *ESR? loops 
+                                    #    -> (see the 'send_cmd_and_wait()' method )
 
-        # self.idn = self.query_check("*IDN?")
-        # self.model, self.model_no, _, _ = self.idn.split(",")
+        self.idn = self.query_check("*IDN?")
+        self.model, self.model_no, _, _ = self.idn.split(",")
         
-        # # set all defaults and announce identity
-        # self.set_default_attrs(**kwargs)
-        # self.print_console(f"Resource successfully opened for [{self.instrument_name}]")
-        # self.print_debug(self.idn)
+        # set all defaults and announce identity
+        self.set_default_attrs(**kwargs)
+        self.print_console(f"Resource successfully opened for [{self.instrument_name}]")
+        self.print_debug(self.idn)
         
-        if self.debug is True:
-            self.debug_force_clear()
+        # if self.debug is True:
+        #     self.debug_force_clear()
 
     def __del__(self):
         """
@@ -82,9 +82,21 @@ class BaseDriver():
         
         assert not status, f'Error: {description}'
         
-    def query_check(self, cmd, container=np.array, fmt=str):
-        ret = self.resource.query(cmd, container)
-        return fmt(ret)
+    def query_check(self, cmd, fmt=str):
+        try:
+            ret = self.resource.query(cmd)
+            return fmt(ret)
+            
+        except Exception as e:  
+            if type(e) == pyvisa.InvalidSession:    # catch a stupid bug 
+                self.handle_InvalidSession_error(cmd, e)
+                ret = self.resource.query(cmd)
+                return fmt(ret)
+            
+            if type(e) == pyvisa.VisaIOError or type(e) == ValueError:   # likely a timeout
+                self.handle_VisaIOError(cmd, e)
+                raise e
+            
             
     def query_check_ascii(self, cmd : str, container = np.array):
         """
@@ -94,17 +106,17 @@ class BaseDriver():
         
         try:
             ret = self.resource.query_ascii_values(cmd, container=container)
+            return ret
             
         except Exception as e:  
             if type(e) == pyvisa.InvalidSession:    # catch a stupid bug 
                 self.handle_InvalidSession_error(cmd, e)
                 ret = self.resource.query(cmd)
+                return ret
             if type(e) == pyvisa.VisaIOError:   # likely a timeout
                 self.handle_VisaIOError(cmd, e)
                 raise e
             
-        return ret
-        
     def query_check_binary(self, cmd : str, container = np.array):
         """
         Sends a query command `cmd` and checks for errors, but
@@ -222,7 +234,7 @@ class BaseDriver():
             self.print_debug(f"setattr -> self.{k} = {v}")
 
     def open_pyvisa_backend(self):
-        self.print_console(f"Initializing using backend `{self.rm_backend}`")
+        self.print_console(f"Initializing pyvisa backend `{self.rm_backend}`")
         if self.rm_backend is not None:
             rm = pyvisa.ResourceManager(self.rm_backend)
         else:
@@ -231,10 +243,20 @@ class BaseDriver():
         self.rm = rm
 
     def open_pyvisa_resource(self):
+        self.print_console(f"Opening resource using backend `{self.rm}`")
         if self.instr_resource is None and self.instr_address is not None:
+            self.print_console(f"{self.instr_resource = }, initializing new one with {self.instr_address = }")
+            if self.rm is None:
+                self.print_debug(f"{self.rm = }, calling self.open_pyvisa_backend()")
+                self.open_pyvisa_backend()
+            else:
+                self.print_debug(f"Found {self.rm = }, calling self.rm.open_resource()")
             resource = self.rm.open_resource(self.instr_address)  # Open the instrument object
+            
         elif self.instr_resource is not None and self.instr_address is None:
-            resource = instr_resource
+            self.print_console(f"open_pyvisa_resource() was called, but already found instrument resource? {self.instr_resource = }")
+            resource = self.instr_resource
+            
         else:
             raise ValueError(f"""
                              \n        Both input arguments "instr_resource" and "instr_address" are none, or both are not none. 
@@ -302,26 +324,37 @@ class BaseDriver():
         if self.debug is True:
             self.print_console(msg, prefix=" **[DEBUG]**  ", **kwargs)
         
-    def print_errormsg(self, msg, cmd, err):
+    def print_warning(self, msg, cmd, err, **kwargs):
+        self.print_console(msg, prefix=" ****[WARNING]****  ", **kwargs)
+        
+    def print_error(self, msg, cmd, err):
         self.print_console(f"Failed to run command '{cmd}', with error:    {err}")
         self.print_console(msg)
+        
+        
     
     ####################################################
     ##################  error handlers  ################
     ####################################################
     
     def handle_VisaIOError(self, cmd, err):
-        self.print_errormsg("Caught VisAIOError exception:  ", cmd, err)
+        self.print_error("Caught VisAIOError exception:  ", cmd, err)
         self.print_console(f"Checking instrument error queue...")
         self.print_console(self.check_instr_error_queue())
     
     def handle_InvalidSession_error(self, cmd, err):
-        self.print_errormsg("Caught InvalidSession exception:  ", cmd, err)
+        self.print_warning("Caught InvalidSession exception:  ", cmd, err)
         self.print_console(f"Waiting one second and restarting backend/resource...")
+        
         time.sleep(1)
         self.rm = self.open_pyvisa_backend()
+        if self.rm is None: 
+            self.handle_InvalidSession_error()
+            
         time.sleep(1)
         self.resource = self.open_pyvisa_resource()
+        if self.resource is None: 
+            self.handle_InvalidSession_error()
     
         
     ####################################################

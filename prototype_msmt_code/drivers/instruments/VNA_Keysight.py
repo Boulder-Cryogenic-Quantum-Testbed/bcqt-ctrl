@@ -517,9 +517,9 @@ class VNA_Keysight(BaseDriver):
         tstart = time.time()   
         
         while check is False:
-            time.sleep(0.01)
+            time.sleep(0.05)
             t_elapsed = time.time() - tstart
-            print(f"      time elapsed: [{t_elapsed:1.2f}s]")
+            print(f"\n      time elapsed: [{t_elapsed:1.2f}s]", end="\r")
             
             # check_str is a string, "0" = busy or "1" = complete
             check_str = self.query_check('STAT:OPER:AVER1:COND?')[1]
@@ -583,41 +583,66 @@ class VNA_Keysight(BaseDriver):
                 f = np.linspace(f1, f2, nf)
                 freqs = np.hstack((freqs, f))
         else:
-            gpoints = int(self.query_check(f'SENSe1:SWEep:POINts?'))
-            freqs = np.linspace(float(self.query_check('SENSe1:FREQuency:START?')),
-                    float(self.query_check('SENSe1:FREQuency:STOP?')), gpoints)
+            n_points = self.query_check(f'SENSe1:SWEep:POINts?', fmt=int)
+            f_start = self.query_check('SENSe1:FREQuency:START?', fmt=float)
+            f_stop = self.query_check('SENSe1:FREQuency:STOP?', fmt=float)
+            freqs = np.linspace(f_start, f_stop, n_points)
         
         self.set_scattering_parameters()
         
         data_dict = {}
         for idx, sparam in enumerate(self.configs["sparam"]):
-            self.print_debug(f"[{idx=}] measuring {sparam} from {self.configs["sparam"]}")
+            self.print_console(f"[{idx+1}/{len(self.configs["sparam"])}] Downloading {sparam} from VNA ")
             # read in magn
             self.write_check(f'CALC1:PAR:MNUM {idx+1}')  # select ch 1, meas (idx+1)
             self.write_check('CALC1:FORMat MLOG') # read in the magn_dB
-            magn_dB = self.query_ascii_values('CALC1:DATA? FDATA', container=np.array)
+            magn_dB = self.query_check_ascii('CALC1:DATA? FDATA', container=np.array)
             self.write_check('CALC1:FORMat UPHASe') # read in the unwrapped phase
-            phase = self.query_ascii_values('CALC1:DATA? FDATA', container=np.array)
+            phase = self.query_check_ascii('CALC1:DATA? FDATA', container=np.array)
             phase_rad = np.deg2rad(phase)
                     
             # possible to use CALC:DATA:MFD? "1,2,3,4" which returns traces 1->4
 
-            # TODO: pandas dataframe?
             data_dict[sparam] = [freqs, magn_dB, phase_rad]
         
-        return data_dict
-    
-    def make_df(self, data_dict:list):
+        ############################################################
+        ### used to be its own function, 'make_dfs', but decided to 
+        ### merge with return_data_s2p 
+        ############################################################
+        
         """
-            takes a dict of np.arrays of the form
-                "sparam" : [freq, magn, phase_rad]
+            takes a dict whose values are lists of 3 np.arrays 
+                and the keys correspond to the associated sparam
+                i.e.
+                    "sparam" : [freq, magn, phase_rad]
             aka the output of return_data_s2p
             
-            and returns a single dataframe
+            returns 
+                df : single dataframe with 'freqs' as the first col 
+                        followed by magn/phase data of each entry
+                e.g.
+                  | freqs | 'sparam' Magn_dB | 'sparam' Phase_rad | ...
         """
         
-        for sparam, [freqs, magn_dB, phase_rad] in data_dict:
+        all_dfs = []
+        for sparam, (freqs, magn_dB, phase_rad) in data_dict.items():
+            all_arrays = np.array([freqs, magn_dB, phase_rad])
+            all_columns = ["Frequency", f"{sparam} magn_dB", f"{sparam} phase_rad"]
+            df = pd.DataFrame.from_records(all_arrays.T, columns=all_columns)
+            all_dfs.append(df)
             
+        # every day I grow resentful of pandas for making my life harder for no reason
+        # merge, join, concat, pd.DataFrame... and in the end I had to google this crap
+        # just to have the first column be 'frequency' and the rest the data........ >:(
+        combined_df = pd.concat(all_dfs, axis=1)
+        combined_df = combined_df.loc[:,~combined_df.columns.duplicated()].copy()
+    
+        # add datetime to first row for archiving purposes
+        first_row = {col : val for col, val in zip(combined_df.columns, [datetime.now()]*len(combined_df.columns))}
+        datetime_row = pd.DataFrame(first_row, index=["datetime.now()"])
+        final_df = pd.concat([datetime_row, combined_df.iloc[:]])
+        
+        return final_df
     
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     # ~~~  Instr Scripts
