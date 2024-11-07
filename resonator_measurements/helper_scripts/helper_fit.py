@@ -23,7 +23,7 @@ import fit_resonator.resonator as res
 import fit_resonator.fit as fsd
 import helper_misc as hm
 
-def fit_single_res(filename, filter_points=[0,0], preprocess_method='linear',
+def fit_single_res(filename, filter_points=[0,0], preprocess_method='circle',
                    use_gauss_filt=False, use_matched_filt=False,
                    use_elliptic_filt=False, use_mov_avg_filt=False,
                    fname_ref=None, data_dir=None, save_dcm_plot=False,
