@@ -5,6 +5,7 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import scipy as sp
 
 ## TODO: these should go in the DataProcessor object
 def unpack_df(df): 
@@ -14,7 +15,7 @@ def unpack_df(df):
     return freqs, magn_dB, phase_rad
 
 
-def plot_s2p_df(df, plot_complex=True, track_min=True):
+def plot_s2p_df(df, plot_complex=True, track_min=True, title="", do_edelay_fit=False,):
     
     """
         assumes df was returned by the VNA driver's 'return_data_s2p' function
@@ -38,25 +39,28 @@ def plot_s2p_df(df, plot_complex=True, track_min=True):
     # with inplace=False to not affect the original df 
     datetime = df.iloc[0].values[0]
     timestamp = datetime.strftime("%m_%d_%I%M%p")
+    
+    # drop datetime from df once we have the timestamp
     fixed_df = df.drop(index='datetime.now()', inplace=False)
 
     freqs = fixed_df["Frequency"].values.astype(float)
 
     # now go through all the s-parameters and grab the magn and phase data using filter()
+    all_axes = []
     for sparam in sparams:
         magn_and_phase = fixed_df.filter(like=sparam)
         magn_dB, phase_rad =  magn_and_phase.iloc[:,0].values.astype(float), magn_and_phase.iloc[:,1].values.astype(float)
-        axes = plot_data_with_pandas(freqs, magn_dB=magn_dB, phase_rad=phase_rad, plot_complex=plot_complex, track_min=track_min, suptitle=timestamp)
-
-    # subplot mosaic returns a dict....
-    fig = list(axes.values())[0].get_figure()
-    fig.suptitle(timestamp)
-    fig.tight_layout()
-    return axes
+        axes = plot_data_with_pandas(freqs, magn_dB=magn_dB, phase_rad=phase_rad, plot_complex=plot_complex, track_min=track_min, do_edelay_fit=do_edelay_fit,)
+        fig = axes[0].get_figure()
+        fig.suptitle(f"{sparam} - {title}", fontsize=18)
+        fig.tight_layout()
+        all_axes.append(axes)
+        
+    return all_axes
         
 
 # TODO: add functionality for taking dataframes instead of individual np arrays
-def plot_data_with_pandas(freqs, magn_dB, phase_deg=None, phase_rad=None, plot_complex=True, track_min=False, suptitle=None, **kwargs):
+def plot_data_with_pandas(freqs, magn_dB, phase_deg=None, phase_rad=None, plot_complex=True, track_min=False, suptitle=None, do_edelay_fit=True, **kwargs):
 
     if phase_rad is None and phase_deg is not None:
         # degrees were given
@@ -75,12 +79,34 @@ def plot_data_with_pandas(freqs, magn_dB, phase_deg=None, phase_rad=None, plot_c
     ## convert dataset to linear, real, and imag
     magn_lin = 10**(magn_dB/20)
     cmpl = magn_lin * np.exp(1j * phase_rad)
+    
+    if do_edelay_fit is True:
+        try:
+            slope, intercept, _, _, _ = sp.stats.linregress(freqs, phase_rad - np.mean(phase_rad))  # force intercept = 0 by subtracting x_0
+            edelay_correction = np.exp(1j * np.abs(slope) * freqs * 2*np.pi)
+            plt.figure()
+            plt.plot(freqs, phase_rad)
+            plt.plot(freqs, slope*freqs+intercept)
+            cmpl = cmpl * edelay_correction
+            plt.plot(freqs, phase_rad)
+            plt.show()
+            print(f"{intercept=}")
+            print(f"{slope*1e9=:1.3f}\n{slope=:1.3f}\n{slope*freqs[0]=:1.3f}\n{slope*freqs[-1]=:1.3f}")
+        except Exception as e:
+            print("Failed to do edelay correction, going back to regular phase_rad")
+            print(e)
+            
+    # update values
     real, imag = np.real(cmpl), np.imag(cmpl)
+    magn_lin = np.abs(cmpl)
+    magn_dB, phase_rad = 20*np.log10(magn_lin), np.unwrap(np.angle(cmpl))
+    
+        
 
     # create a new plot or use one given as arg
     # # %% plot data
     mosaic = "AACC\nBBCC"
-    fig, axes = plt.subplot_mosaic(mosaic, figsize=(10,5))
+    fig, axes = plt.subplot_mosaic(mosaic, figsize=(13,5))
     ax1, ax2, ax3 = axes["A"], axes["B"], axes["C"]
     
     ax3.plot(real, imag, 'o', markersize=6, **kwargs)
@@ -99,13 +125,13 @@ def plot_data_with_pandas(freqs, magn_dB, phase_deg=None, phase_rad=None, plot_c
         ax1.axvline(0, linestyle='--', color='k', linewidth=1)
         ax2.axvline(0, linestyle='--', color='k', linewidth=1)
         ax3.plot(real[freq_argmin], imag[freq_argmin], 'y*', markersize=8, label=freq_min_label)
-        fig.legend()
+        fig.legend(loc="upper left")
     else:
         new_freqs = freqs/1e3
         
     # magn and phase
-    ax1.plot(new_freqs, magn_lin, "r.", markersize=6, )
-    ax2.plot(new_freqs, phase_rad, "b.", markersize=6, )
+    ax1.plot(new_freqs, magn_dB, "r.", markersize=3, )
+    ax2.plot(new_freqs, phase_rad, "b.", markersize=3, )
 
     ax1.set_title(f"Freq vs Magn [$f_{"{min}"}$ = {freq_min/1e9:1.6f} GHz]")
     ax2.set_title(f"Freq vs Phase [$f_{"{min}"}$ = {freq_min/1e9:1.6f} GHz]")
@@ -117,12 +143,13 @@ def plot_data_with_pandas(freqs, magn_dB, phase_deg=None, phase_rad=None, plot_c
     ax1.set_ylabel("S21 [dB]")
     ax2.set_ylabel("Phase [Rad]")
     
+    
     if plot_complex is False:
         fig.delaxes(ax3)
         axes = [ax1, ax2]
         
     if suptitle is not None:
-        fig.suptitle(suptitle)
+        fig.suptitle(suptitle, fontsize=18)
     
     fig.tight_layout()
     

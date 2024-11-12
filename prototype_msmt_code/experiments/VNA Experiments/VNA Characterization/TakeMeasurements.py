@@ -86,9 +86,9 @@ def Make_Measurement(VNA, **kwargs):
     VNA.setup_s2p_measurement()
     VNA.add_kwargs_and_filter_configs(**kwargs)
     VNA.check_instr_error_queue()
-    VNA.acquire_trace()
+    VNA.run_measurement()
     
-def Acquire_Trace(VNA, plot_complex=True, track_min=True):
+def Acquire_Trace(VNA, plot_complex=True, track_min=True, title="", do_edelay_fit=True):
     """
         Should take zero time, only asks VNA to send the data it has
         
@@ -99,33 +99,49 @@ def Acquire_Trace(VNA, plot_complex=True, track_min=True):
     
     """
     df = VNA.return_data_s2p()
-    axes = qh.plot_s2p_df(df, plot_complex, track_min)
+    all_axes = qh.plot_s2p_df(df, plot_complex, track_min, title, do_edelay_fit=do_edelay_fit)
     
-    return df, axes
+    return df, all_axes
         #########################
 
-def Archive_Data(VNA, s2p_df:pd.DataFrame, expt_name:str, expt_category:str = '', save_dir:str = "./data"):
+def Archive_Data(VNA, s2p_df:pd.DataFrame, meas_name:str, expt_category:str = '', save_dir:str = "./data", all_axes=None):
     # check if save_dir is a path or string
     if not isinstance(save_dir, Path):
         save_dir = Path(save_dir).absolute()
+        
+    timestamp = datetime.today().strftime("%m_%d_%I%M%p")
+    file_dir = save_dir / expt_category / meas_name / timestamp
     
-    # check if save_dir exists
-    if not save_dir.exists():
+    # check if file_dir exists
+    if not file_dir.exists():
         VNA.print_console(f"Creating category {expt_category}")
         VNA.print_console(f"    under save directory {save_dir}")
-        if expt_category not in save_dir.parts:
-            file_dir = save_dir / expt_category
         file_dir.mkdir(exist_ok=True, parents=True)
     
     # append number to end of filename and save to csv
     expt_no = len(list(save_dir.glob("*.csv"))) + 1    
-    filename = save_dir / f"{expt_name}_{expt_no:03d}.csv"
-    VNA.print_console(f"Saving data as {filename.name}")
-    VNA.print_console(f"    under '{str(Path(*filename.parts[-6:-1]))}'")
+    filename = f"{meas_name}_{expt_no:03d}.csv"
+    VNA.print_console(f"Saving data as {filename}")
+    VNA.print_console(f"    under '{str(Path(*file_dir.parts[-6:]))}'")
     
-    s2p_df.to_csv(filename)
+    final_path = file_dir / filename
+    print(final_path)
+    s2p_df.to_csv(final_path)
     
-    return filename
+    if all_axes is not None:
+        for axes in all_axes:
+            ax = axes[0]
+            fig = ax.get_figure()
+            title = fig.get_suptitle().replace(" - ","_") + ".png"
+            fig_filename = file_dir / title
+            fig.tight_layout()
+            fig.savefig(fig_filename)
+            plt.show()
+            print(fig_filename)
+            
+    
+    return filename, final_path.parent
+
 
     #########################
 # %% set default values
@@ -135,10 +151,10 @@ DefaultConfig = {
     "f_start" : 4e9,
     "f_stop" : 8e9,
     "if_bandwidth" : 5000,
-    "power" : -20,
+    "power" : -75,
     "edelay" : 0,
-    "averages" : 10,
-    "sparam" : 'all',
+    "averages" : 3,
+    "sparam" : ['S11', 'S22', 'S21'],  # do not want to measure S12 in VNA two port mode
     
     "segment_type" : "linear",
 }
@@ -150,24 +166,24 @@ PNA_X.set_instr_params(DefaultConfig)
 Measurement_Configs = {
     "f_start" : 2e9,
     "f_stop" : 10e9,
-    "n_pts" : 2001,
-    "if_bw" : 15000,
-    "power" : -20,
+    "n_pts" : 4001,
+    "if_bw" : 5000,
+    "power" : -60,
+    "averages" : 3,
     
     # by default, sparam = 'all', edelay = 0, averages = 10
 }
 
-expt_category = "TestCode"
-meas_name = "Attenuator_With_Thru"
+expt_category = "Circulators"
+meas_name = "VNA_Purple_Cables"
 
 Reset_VNA(PNA_X, Measurement_Configs)
 Make_Measurement(PNA_X)
 
-all_dfs, axes = Acquire_Trace(PNA_X, plot_complex=False)
+# %%
+# TODO: stop this method from resetting display configs
+all_dfs, all_axes = Acquire_Trace(PNA_X, plot_complex=False, track_min=False, title=meas_name, do_edelay_fit=True)
+filename, filepath = Archive_Data(PNA_X, all_dfs, meas_name=meas_name, expt_category=expt_category, all_axes=all_axes)
 
 # %%
 
-filename = Archive_Data(PNA_X, all_dfs, expt_category, meas_name)
-
-
-# %%

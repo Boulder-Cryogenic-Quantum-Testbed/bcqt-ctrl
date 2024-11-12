@@ -385,14 +385,14 @@ class VNA_Keysight(BaseDriver):
         
         # raise NotImplemented
     
-        # self.write_check(f'SOUR1:POW1 {self.configs["power"]}')
-        # self.write_check(f'SENSe1:AVERage:STATe ON')
-        # self.write_check(f'SENSe1:AVERage:Count {self.configs["averages"] // 1}')
-        # self.write_check(f'SENSe1:BANDwidth {self.configs["if_bandwidth"]}HZ')
+        self.write_check(f'SOUR1:POW1 {self.configs["power"]}')
+        self.write_check(f'SENSe1:AVERage:STATe ON')
+        self.write_check(f'SENSe1:AVERage:Count {self.configs["averages"] // 1}')
+        self.write_check(f'SENSe1:BANDwidth {self.configs["if_bandwidth"]}HZ')
 
-        # # autoscale for visibility on the display
-        # self.write_check(f'DISPlay:WINDow1:TRACe1:Y:SCAle:AUTO')
-        # self.write_check(f'DISPlay:WINDow2:TRACe1:Y:SCAle:AUTO')
+        # autoscale for visibility on the display
+        self.write_check(f'DISPlay:WINDow1:TRACe1:Y:SCAle:AUTO')
+        self.write_check(f'DISPlay:WINDow2:TRACe1:Y:SCAle:AUTO')
 
 
     def setup_measurement(self, Expt_Config=None):
@@ -482,7 +482,7 @@ class VNA_Keysight(BaseDriver):
         self.write_check(f'SENSe1:AVERage:Count {self.configs["averages"] // 1}')
 
     
-    def acquire_trace(self):
+    def run_measurement(self):
         """
             Run the measurement and stop it once finished
         """
@@ -493,16 +493,16 @@ class VNA_Keysight(BaseDriver):
         # self.write_check('SENS1:SWE:MODE SINGle')  
         # self.query_check('*OPC?')  
         # self.write_check('INIT:IMM')  # just use INIT:IMM to trigger one sweep
-        # self.write_check('FORMat ASCII')
-        # self.write_check('DISPlay:WINDow1:Y:AUTO')
-        # self.write_check('DISPlay:WINDow2:Y:AUTO')
+        self.write_check('FORMat ASCII')
+        self.write_check('DISPlay:WINDow1:Y:AUTO')
+        self.write_check('DISPlay:WINDow2:Y:AUTO')
 
         # initiate display and turn on output
         # self.write_check('OUTPut:STATe ON')
         # self.write_check('ABORT;INITIATE:IMMEDIATE')  # just use INIT:IMM to trigger one sweep
-        # self.write_check('FORMat ASCII')
-        # self.write_check('DISPlay:WINDow1:Y:AUTO')
-        # self.write_check('DISPlay:WINDow2:Y:AUTO')
+        self.write_check('FORMat ASCII')
+        self.write_check('DISPlay:WINDow1:Y:AUTO')
+        self.write_check('DISPlay:WINDow2:Y:AUTO')
                 
                 
         self.write_check('OUTPut:STATe ON')
@@ -519,7 +519,7 @@ class VNA_Keysight(BaseDriver):
         while check is False:
             time.sleep(0.05)
             t_elapsed = time.time() - tstart
-            print(f"\n      time elapsed: [{t_elapsed:1.2f}s]", end="\r")
+            print(f"\n      Time elapsed: [{t_elapsed:1.2f}s]", end="\r")
             
             # check_str is a string, "0" = busy or "1" = complete
             check_str = self.query_check('STAT:OPER:AVER1:COND?')[1]
@@ -527,15 +527,15 @@ class VNA_Keysight(BaseDriver):
             # once it is "1", print that we're finished
             if check_str != "0":
                 print(f"\nTrace finished. Uploading now.")
-                print(f"\n   Total time elapsed: {t_elapsed:1.2f} seconds")
+                print(f"\n   Total time elapsed: {t_elapsed:1.2f} seconds", end="\r")
                 if t_elapsed >= 600:
                     print(f"                     = {t_elapsed/60:1.1f} minutes \n")
                 
                 # update the variable and let the while finish
                 check = bool(check_str)
             
-        self.write_check('OUTPut:STATe OFF')
-        self.write_check('INITiate:CONTinuous OFF')
+        # self.write_check('OUTPut:STATe OFF')
+        # self.write_check('INITiate:CONTinuous OFF')
 
 
     # TODO: only written like this to not break previous scripts
@@ -667,7 +667,7 @@ class VNA_Keysight(BaseDriver):
         # self.get_instr_params()
         # self.setup_measurement()
         # self.check_instr_error_queue()
-        # self.acquire_trace()
+        # self.run_measurement()
         # freqs, magn_dB, phase_deg = self.return_data()
         
         # self.print_debug("Finished Taking Trace")
