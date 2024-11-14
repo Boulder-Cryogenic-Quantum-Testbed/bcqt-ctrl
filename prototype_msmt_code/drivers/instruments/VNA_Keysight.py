@@ -667,7 +667,7 @@ class VNA_Keysight(BaseDriver):
         # self.get_instr_params()
         # self.setup_measurement()
         # self.check_instr_error_queue()
-        # self.run_measurement()
+        # self.run_measurement() 
         # freqs, magn_dB, phase_deg = self.return_data()
         
         # self.print_debug("Finished Taking Trace")
