@@ -340,11 +340,11 @@ class VNA_Keysight(BaseDriver):
             self.set_instr_params(Expt_Config)
         
         self.print_console("Initializing VNA for all four s-parameter measurement...")
-        self.write_check('*RST')
-        self.write_check('*CLS')
+        # self.write_check('*RST')
+        # self.write_check('*CLS')
 
         # self.write_check('SYSTem:FPRESet')
-        self.write_check('SYSTem:UPRESet')
+        # self.write_check('SYSTem:UPRESet')
         time.sleep(0.05)
         self.write_check('OUTPut:STATe OFF')
 
@@ -391,8 +391,8 @@ class VNA_Keysight(BaseDriver):
         self.write_check(f'SENSe1:BANDwidth {self.configs["if_bandwidth"]}HZ')
 
         # autoscale for visibility on the display
-        self.write_check(f'DISPlay:WINDow1:TRACe1:Y:SCAle:AUTO')
-        self.write_check(f'DISPlay:WINDow2:TRACe1:Y:SCAle:AUTO')
+        # self.write_check(f'DISPlay:WINDow1:TRACe1:Y:SCAle:AUTO')
+        # self.write_check(f'DISPlay:WINDow2:TRACe1:Y:SCAle:AUTO')
 
 
     def setup_measurement(self, Expt_Config=None):
@@ -484,7 +484,7 @@ class VNA_Keysight(BaseDriver):
     
     def run_measurement(self):
         """
-            Run the measurement and stop it once finished
+            Run the measurement and continuously query until it reports finished
         """
             
         # initiate display and turn on output
@@ -494,22 +494,22 @@ class VNA_Keysight(BaseDriver):
         # self.query_check('*OPC?')  
         # self.write_check('INIT:IMM')  # just use INIT:IMM to trigger one sweep
         self.write_check('FORMat ASCII')
-        self.write_check('DISPlay:WINDow1:Y:AUTO')
-        self.write_check('DISPlay:WINDow2:Y:AUTO')
+        # self.write_check('DISPlay:WINDow1:Y:AUTO')
+        # self.write_check('DISPlay:WINDow2:Y:AUTO')
 
         # initiate display and turn on output
         # self.write_check('OUTPut:STATe ON')
         # self.write_check('ABORT;INITIATE:IMMEDIATE')  # just use INIT:IMM to trigger one sweep
-        self.write_check('FORMat ASCII')
-        self.write_check('DISPlay:WINDow1:Y:AUTO')
-        self.write_check('DISPlay:WINDow2:Y:AUTO')
+        # self.write_check('FORMat ASCII')
+        # self.write_check('DISPlay:WINDow1:Y:AUTO')
+        # self.write_check('DISPlay:WINDow2:Y:AUTO')
                 
                 
         self.write_check('OUTPut:STATe ON')
         self.write_check('INITiate:CONTinuous ON')
-        self.write_check('FORMat ASCII')
-        self.write_check('DISPlay:WINDow1:Y:AUTO')
-        self.write_check('DISPlay:WINDow2:Y:AUTO')
+        # self.write_check('FORMat ASCII')
+        # self.write_check('DISPlay:WINDow1:Y:AUTO')
+        # self.write_check('DISPlay:WINDow2:Y:AUTO')
         
         
         # check if the VNA has finished every second, in my experience the *OPC? or *WAI command isnt very reliable
@@ -595,10 +595,10 @@ class VNA_Keysight(BaseDriver):
             self.print_console(f"[{idx+1}/{len(self.configs["sparam"])}] Downloading {sparam} from VNA ")
             # read in magn
             self.write_check(f'CALC1:PAR:MNUM {idx+1}')  # select ch 1, meas (idx+1)
-            self.write_check('CALC1:FORMat MLOG') # read in the magn_dB
-            magn_dB = self.query_check_ascii('CALC1:DATA? FDATA', container=np.array)
             self.write_check('CALC1:FORMat UPHASe') # read in the unwrapped phase
             phase = self.query_check_ascii('CALC1:DATA? FDATA', container=np.array)
+            self.write_check('CALC1:FORMat MLOG') # read in the magn_dB
+            magn_dB = self.query_check_ascii('CALC1:DATA? FDATA', container=np.array)
             phase_rad = np.deg2rad(phase)
                     
             # possible to use CALC:DATA:MFD? "1,2,3,4" which returns traces 1->4
