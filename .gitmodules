@@ -1,3 +1,0 @@
-[submodule "prototype_msmt_code/drivers/instruments/CryoSwitchController"]
-	path = prototype_msmt_code/drivers/instruments/CryoSwitchController
-	url = https://github.com/QphoX/CryoSwitchController
